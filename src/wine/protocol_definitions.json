@@ -230,7 +230,8 @@
             "matches": [
                 { "name": "GetFisVersion", "level": "INFO", "match": { "0": "0xDE", "1": "0x00" } },
                 { "name": "GetFisStatus", "level": "LOG", "match": { "0": "0xDE", "1": "0x01" } },
-                { "name": "GetFisData", "level": "LOG", "match": { "0": "0xDE", "1": "0x02" } }
+                { "name": "GetFisData", "level": "LOG", "match": { "0": "0xDE", "1": "0x02" } },
+                { "name": "GetFisExtStatus", "level": "LOG", "match": { "0": "0xDE", "1": "0x03" } }
             ]
         },
         "0xED": {
@@ -243,7 +244,7 @@
         "0xFA": {
             "name": "VendorGeneric10",
             "matches": [
-                { "name": "Generic10_Wrapper", "level": "INFO", "match": { "0": "0xFA" } }
+                { "name": "Generic10_Wrapper", "level": "LOG", "match": { "0": "0xFA" } }
             ]
         },
         "0xE0": {

@@ -64,13 +64,12 @@ def redecode_log(log_path, def_path):
                     cdb_bytes = bytes.fromhex(cdb_str.strip())
 
                     # 1. Base decoding
+                    cmd_name, cmd_level = decoder.decode(cdb_bytes)
                     if cdb_bytes[0] == 0xFA:
                         cmd_name = "Generic10_Wrapper"
-                        cmd_level = "INFO"
-                    else:
-                        cmd_name, cmd_level = decoder.decode(cdb_bytes)
 
                     # 2. Deep decoding for 0xFA
+
                     if cdb_bytes[0] == 0xFA and "[Empty]" not in data_str:
                         # Clean up data string (remove "..." and whitespace)
                         hex_data = data_str.split("...")[0].strip()
