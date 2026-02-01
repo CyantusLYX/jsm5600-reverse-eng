@@ -1,5 +1,5 @@
 {
-    "_comment": "SEM Protocol Definitions - Full sync with pins_protocol.md v6",
+    "_comment": "SEM Protocol Definitions - Full sync with pins_protocol.md v7",
     "groups": {
         "0x00": {
             "name": "Group0_ScanControl",
@@ -146,12 +146,19 @@
         "0xC2": {
             "name": "LegacyPT_C2",
             "matches": [
-                { "name": "LegacyPassthrough_C2", "level": "INFO", "match": { "0": "0xC2" } }
+                { "name": "SetScanSpeed (Legacy)", "level": "INFO", "match": { "0": "0xC2", "1": "0x00" } },
+                { "name": "SetFreeze (Legacy)", "level": "INFO", "match": { "0": "0xC2", "1": "0x01" } },
+                { "name": "PowerSync (Legacy)", "level": "INFO", "match": { "0": "0xC2", "1": "0x10" } }
             ]
         },
         "0xC3": {
             "name": "LegacyPT_C3",
             "matches": [
+                { "name": "ClearText (Legacy)", "level": "INFO", "match": { "0": "0xC3", "1": "0x04" } },
+                { "name": "GeoMode (Legacy)", "level": "INFO", "match": { "0": "0xC3", "1": "0x05" } },
+                { "name": "StartScan (Legacy)", "level": "WARN", "match": { "0": "0xC3", "1": "0x07", "2": "0x01" } },
+                { "name": "StopScan (Legacy)", "level": "WARN", "match": { "0": "0xC3", "1": "0x07", "2": "0x00" } },
+                { "name": "Sync (Legacy)", "level": "INFO", "match": { "0": "0xC3", "1": "0x08" } },
                 { "name": "LegacyPassthrough_C3", "level": "INFO", "match": { "0": "0xC3" } }
             ]
         },
