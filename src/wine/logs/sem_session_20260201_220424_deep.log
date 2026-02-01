@@ -51,11 +51,11 @@
 2026-02-01 22:04:37.699 [INFO] [CMD ] LegacyPassthrough_C3      | CDB: C3 00 00 00 02 00    | DATA: [Empty]                        -> Status=0
 2026-02-01 22:04:37.702 [INFO] [RES ] LegacyPassthrough_C3      | CDB: C3 00 00 00 02 00    | DATA: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 ... -> Status=1
 2026-02-01 22:04:37.784 [LOG ] [CMD ] Generic10_Wrapper         | CDB: FA 00 00 00 00 00 00 00 06 00 | DATA: [Empty]                        -> Status=0
-2026-02-01 22:04:37.788 [WARN] [RES ] FA<Group0_ScanControl_Generic> | CDB: FA 00 00 00 00 00 00 00 06 00 | DATA: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 ... -> Status=1
+2026-02-01 22:04:37.788 [LOG ] [RES ] FA_Response               | CDB: FA 00 00 00 00 00 00 00 06 00 | DATA: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 ... -> Status=1
 2026-02-01 22:04:37.873 [INFO] [CMD ] LegacyPassthrough_C2      | CDB: C2 01 00 00 00 00    | DATA: [Empty]                        -> Status=0
 2026-02-01 22:04:37.875 [INFO] [RES ] LegacyPassthrough_C2      | CDB: C2 01 00 00 00 00    | DATA: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 ... -> Status=1
 2026-02-01 22:04:37.960 [LOG ] [CMD ] Generic10_Wrapper         | CDB: FA 00 00 00 00 00 00 00 06 00 | DATA: [Empty]                        -> Status=0
-2026-02-01 22:04:37.962 [WARN] [RES ] FA<Group0_ScanControl_Generic> | CDB: FA 00 00 00 00 00 00 00 06 00 | DATA: 00 00 00 00 00 01 00 00 00 00 00 00 00 00 00 00 ... -> Status=1
+2026-02-01 22:04:37.962 [LOG ] [RES ] FA_Response               | CDB: FA 00 00 00 00 00 00 00 06 00 | DATA: 00 00 00 00 00 01 00 00 00 00 00 00 00 00 00 00 ... -> Status=1
 2026-02-01 22:04:38.047 [INFO] [CMD ] LegacyPassthrough_C3      | CDB: C3 00 00 00 04 00    | DATA: [Empty]                        -> Status=0
 2026-02-01 22:04:38.050 [INFO] [RES ] LegacyPassthrough_C3      | CDB: C3 00 00 00 04 00    | DATA: 00 00 00 00 00 01 00 00 00 00 00 00 00 00 00 00 ... -> Status=1
 2026-02-01 22:04:38.133 [INFO] [CMD ] LegacyPassthrough_C2      | CDB: C2 00 00 00 01 00    | DATA: [Empty]                        -> Status=0
@@ -65,9 +65,9 @@
 2026-02-01 22:04:38.414 [LOG ] [CMD ] GetIMS                    | CDB: C8 82 00 00 04 00    | DATA: [Empty]                        -> Status=0
 2026-02-01 22:04:38.415 [LOG ] [RES ] GetIMS                    | CDB: C8 82 00 00 04 00    | DATA: 00 82 00 00 04 00 40 B7 00 00 00 00 00 00 00 00 ... -> Status=1
 2026-02-01 22:04:38.500 [LOG ] [CMD ] Generic10_Wrapper         | CDB: FA 00 00 00 00 00 00 00 06 00 | DATA: [Empty]                        -> Status=0
-2026-02-01 22:04:38.501 [WARN] [RES ] FA<Group0_ScanControl_Generic> | CDB: FA 00 00 00 00 00 00 00 06 00 | DATA: 00 00 00 00 00 01 00 00 00 00 00 00 00 00 00 00 ... -> Status=1
+2026-02-01 22:04:38.501 [LOG ] [RES ] FA_Response               | CDB: FA 00 00 00 00 00 00 00 06 00 | DATA: 00 00 00 00 00 01 00 00 00 00 00 00 00 00 00 00 ... -> Status=1
 2026-02-01 22:04:38.584 [LOG ] [CMD ] Generic10_Wrapper         | CDB: FA 00 00 00 00 00 00 00 06 00 | DATA: [Empty]                        -> Status=0
-2026-02-01 22:04:38.586 [WARN] [RES ] FA<Group0_ScanControl_Generic> | CDB: FA 00 00 00 00 00 00 00 06 00 | DATA: 00 00 00 00 00 01 00 00 00 00 00 00 00 00 00 00 ... -> Status=1
+2026-02-01 22:04:38.586 [LOG ] [RES ] FA_Response               | CDB: FA 00 00 00 00 00 00 00 06 00 | DATA: 00 00 00 00 00 01 00 00 00 00 00 00 00 00 00 00 ... -> Status=1
 2026-02-01 22:04:38.670 [LOG ] [CMD ] GetIMS                    | CDB: C8 82 00 00 04 00    | DATA: [Empty]                        -> Status=0
 2026-02-01 22:04:38.671 [LOG ] [RES ] GetIMS                    | CDB: C8 82 00 00 04 00    | DATA: 00 82 00 00 04 00 40 B7 00 00 00 00 00 00 00 00 ... -> Status=1
 2026-02-01 22:04:38.755 [LOG ] [CMD ] GetIMS                    | CDB: C8 82 00 00 04 00    | DATA: [Empty]                        -> Status=0

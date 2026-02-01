@@ -69,18 +69,21 @@ def redecode_log(log_path, def_path):
                         cmd_name = "Generic10_Wrapper"
 
                     # 2. Deep decoding for 0xFA
-
                     if cdb_bytes[0] == 0xFA and "[Empty]" not in data_str:
-                        # Clean up data string (remove "..." and whitespace)
-                        hex_data = data_str.split("...")[0].strip()
-                        try:
-                            payload_bytes = bytes.fromhex(hex_data)
-                            inner_name, inner_level = decoder.decode(payload_bytes)
-                            if "Unknown" not in inner_name:
-                                cmd_name = f"FA<{inner_name}>"
-                                cmd_level = inner_level
-                        except:
-                            pass
+                        if direction == "CMD":
+                            # Only decode DATA as command if it's being SENT
+                            hex_data = data_str.split("...")[0].strip()
+                            try:
+                                payload_bytes = bytes.fromhex(hex_data)
+                                inner_name, inner_level = decoder.decode(payload_bytes)
+                                if "Unknown" not in inner_name:
+                                    cmd_name = f"FA<{inner_name}>"
+                                    cmd_level = inner_level
+                            except:
+                                pass
+                        else:
+                            # It's a RESPONSE, label as response data
+                            cmd_name = "FA_Response"
 
                     # 3. Final level override for errors
                     try:
