@@ -134,7 +134,14 @@ class SCSILogger:
         self.file.write(f"{ts} [{level:<4}] [EVT] {msg}\n")
 
     def log_transaction(
-        self, cdb_bytes, data_bytes, direction, status, cmd_name, defined_level="INFO"
+        self,
+        cdb_bytes,
+        data_bytes,
+        direction,
+        status,
+        cmd_name,
+        defined_level="INFO",
+        extra_info="",
     ):
         ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
 
@@ -161,7 +168,11 @@ class SCSILogger:
             data_str = "| DATA: [Empty] "
 
         # Format: [TIMESTAMP] [LEVEL] [DIRECTION] [NAME] | CDB: ... | DATA: ... -> STATUS
-        line = f"{ts} [{level:<4}] [{direction}] {cmd_name:<20} | CDB: {cdb_str:<20} {data_str}-> Status={status}\n"
+        extra = f" {extra_info}" if extra_info else ""
+        line = (
+            f"{ts} [{level:<4}] [{direction}] {cmd_name:<20} | CDB: {cdb_str:<20} "
+            f"{data_str}-> Status={status}{extra}\n"
+        )
         self.file.write(line)
 
 
@@ -262,17 +273,32 @@ class BridgeSEM:
             session_logger = SCSILogger()
             session_logger.write_meta(f"Client Connected: {addr}")
 
+            def recvall(sock, length):
+                data = bytearray()
+                while len(data) < length:
+                    chunk = sock.recv(length - len(data))
+                    if not chunk:
+                        return None
+                    data.extend(chunk)
+                return bytes(data)
+
             while True:
                 # 1. Read CDB Len
-                header = conn.recv(4)
-                if not header or len(header) < 4:
+                header = recvall(conn, 9)
+                if not header or len(header) < 9:
                     break
-                cdb_len = struct.unpack("<I", header)[0]
+                cdb_len, dir_byte, xfer_len = struct.unpack("<IBI", header)
 
                 # 2. Read CDB
-                cdb = conn.recv(cdb_len)
-                if len(cdb) != cdb_len:
+                cdb = recvall(conn, cdb_len)
+                if not cdb or len(cdb) != cdb_len:
                     break
+
+                data_out = None
+                if dir_byte == 2 and xfer_len > 0:
+                    data_out = recvall(conn, xfer_len)
+                    if not data_out or len(data_out) != xfer_len:
+                        break
 
                 # Decode Command Name
                 cmd_name, cmd_level = self.decoder.decode(cdb)
@@ -283,7 +309,9 @@ class BridgeSEM:
                 )
 
                 # 3. Execute on Real Device
-                resp_data, status = self.send_scsi_cmd(cdb)
+                resp_data, status, detail = self.send_scsi_cmd(
+                    cdb, direction=dir_byte, data_out=data_out, xfer_len=xfer_len
+                )
 
                 # For RES, we can pass resp_data to decoder for FA_Response logic
                 cmd_name_res, cmd_level_res = self.decoder.decode(
@@ -298,6 +326,7 @@ class BridgeSEM:
                     status,
                     cmd_name_res,
                     defined_level=cmd_level_res,
+                    extra_info=detail,
                 )
 
                 # 4. Send Response
@@ -315,36 +344,67 @@ class BridgeSEM:
                 session_logger.close()
             conn.close()
 
-    def send_scsi_cmd(self, cdb_bytes):
-        # We assume default read buffer of 4KB
-        buff_size = 4096
+    def send_scsi_cmd(self, cdb_bytes, direction=1, data_out=None, xfer_len=0):
+        buff_size = max(int(xfer_len), 0)
+        if buff_size == 0:
+            buff_size = 4096
+
         data_buff = ctypes.create_string_buffer(buff_size)
         sense_buff = ctypes.create_string_buffer(32)
         cmd_buff = ctypes.create_string_buffer(cdb_bytes)
 
         io_hdr = SgIoHdr()
         io_hdr.interface_id = ord("S")
-        io_hdr.dxfer_direction = SG_DXFER_FROM_DEV
         io_hdr.cmd_len = len(cdb_bytes)
         io_hdr.mx_sb_len = 32
-        io_hdr.dxfer_len = buff_size
-        io_hdr.dxferp = ctypes.cast(data_buff, ctypes.c_void_p)
+        io_hdr.timeout = 5000
+
+        if direction == 2:
+            io_hdr.dxfer_direction = SG_DXFER_TO_DEV
+            if data_out is None:
+                data_out = b""
+            out_len = len(data_out)
+            out_buff = ctypes.create_string_buffer(data_out, out_len)
+            io_hdr.dxfer_len = out_len
+            io_hdr.dxferp = ctypes.cast(out_buff, ctypes.c_void_p)
+        elif direction == 1:
+            io_hdr.dxfer_direction = SG_DXFER_FROM_DEV
+            io_hdr.dxfer_len = buff_size
+            io_hdr.dxferp = ctypes.cast(data_buff, ctypes.c_void_p)
+        else:
+            io_hdr.dxfer_direction = SG_DXFER_NONE
+            io_hdr.dxfer_len = 0
+            io_hdr.dxferp = None
+
         io_hdr.cmdp = ctypes.cast(cmd_buff, ctypes.c_void_p)
         io_hdr.sbp = ctypes.cast(sense_buff, ctypes.c_void_p)
-        io_hdr.timeout = 5000
 
         try:
             fcntl.ioctl(self.dev_fd, SG_IO, io_hdr)
             status = io_hdr.status
+            sense_len = min(int(io_hdr.sb_len_wr), 32)
+            sense_bytes = bytes(sense_buff.raw[:sense_len]) if sense_len > 0 else b""
+            detail = ""
+            if status != 0 or io_hdr.host_status != 0 or io_hdr.driver_status != 0:
+                sense_hex = (
+                    " ".join(f"{b:02X}" for b in sense_bytes) if sense_bytes else ""
+                )
+                detail = (
+                    f"| SCSI=0x{status:02X} Host=0x{io_hdr.host_status:02X} "
+                    f"Driver=0x{io_hdr.driver_status:02X}"
+                )
+                if sense_hex:
+                    detail += f" Sense={sense_hex}"
+
             if status == 0:
-                # We return the whole buffer, let caller slice?
-                # Actually for cleaner logs we might want true length but we don't know it easily
-                return data_buff.raw, 1  # SS_COMP
-            else:
-                return b"", 4  # SS_ERR
+                if direction == 1:
+                    xfered = int(io_hdr.dxfer_len - io_hdr.resid)
+                    return data_buff.raw[:xfered], 1, detail
+                return b"", 1, detail
+            return b"", 4, detail
         except Exception as e:
             logger.error(f"IOCTL failed: {e}")
-            return b"", 4
+            return b"", 4, f"| IOCTL={e}"
 
 
 if __name__ == "__main__":

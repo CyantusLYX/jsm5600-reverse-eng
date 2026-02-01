@@ -6,6 +6,8 @@
             "matches": [
                 { "name": "SetSpeed", "level": "INFO", "match": { "0": "0x00", "1": "0x01", "4": "0x00" } },
                 { "name": "SetArea", "level": "INFO", "match": { "0": "0x00", "1": "0x01", "4": "0x01" } },
+                { "name": "SetMagFactor", "level": "INFO", "match": { "0": "0x00", "1": "0x01", "4": "0x03" } },
+                { "name": "SetMode", "level": "INFO", "match": { "0": "0x00", "1": "0x01", "4": "0x08" } },
                 { "name": "StartScan", "level": "WARN", "match": { "0": "0x00", "1": "0x01", "4": "0x09", "5": "0x01" } },
                 { "name": "StopScan", "level": "WARN", "match": { "0": "0x00", "1": "0x01", "4": "0x09", "5": "0x00" } },
                 { "name": "Sync", "level": "INFO", "match": { "0": "0x00", "1": "0x01", "4": "0x0A" } },
@@ -148,18 +150,23 @@
             "matches": [
                 { "name": "SetScanSpeed (Legacy)", "level": "INFO", "match": { "0": "0xC2", "1": "0x00" } },
                 { "name": "SetFreeze (Legacy)", "level": "INFO", "match": { "0": "0xC2", "1": "0x01" } },
+                { "name": "SetArea (Legacy)", "level": "INFO", "match": { "0": "0xC2", "1": "0x02" } },
                 { "name": "PowerSync (Legacy)", "level": "INFO", "match": { "0": "0xC2", "1": "0x10" } }
             ]
         },
         "0xC3": {
             "name": "LegacyPT_C3",
             "matches": [
+                { "name": "GetLegacyStatus (Short)", "level": "LOG", "match": { "0": "0xC3", "1": "0x00", "4": "0x02" } },
+                { "name": "GetLegacyStatus (Long)", "level": "LOG", "match": { "0": "0xC3", "1": "0x00", "4": "0x04" } },
                 { "name": "ClearText (Legacy)", "level": "INFO", "match": { "0": "0xC3", "1": "0x04" } },
                 { "name": "GeoMode (Legacy)", "level": "INFO", "match": { "0": "0xC3", "1": "0x05" } },
                 { "name": "StartScan (Legacy)", "level": "WARN", "match": { "0": "0xC3", "1": "0x07", "2": "0x01" } },
                 { "name": "StopScan (Legacy)", "level": "WARN", "match": { "0": "0xC3", "1": "0x07", "2": "0x00" } },
                 { "name": "Sync (Legacy)", "level": "INFO", "match": { "0": "0xC3", "1": "0x08" } },
-                { "name": "LegacyPassthrough_C3", "level": "INFO", "match": { "0": "0xC3" } }
+                { "name": "LegacyPolling_07_00", "level": "LOG", "match": { "0": "0xC3", "1": "0x00", "4": "0x07" } },
+                { "name": "LegacyPolling_0C_00", "level": "LOG", "match": { "0": "0xC3", "1": "0x00", "4": "0x0C" } },
+                { "name": "LegacyPolling_0D_00", "level": "LOG", "match": { "0": "0xC3", "1": "0x00", "4": "0x0D" } }
             ]
         },
         "0xC6": {
@@ -238,7 +245,13 @@
                 { "name": "GetFisVersion", "level": "INFO", "match": { "0": "0xDE", "1": "0x00" } },
                 { "name": "GetFisStatus", "level": "LOG", "match": { "0": "0xDE", "1": "0x01" } },
                 { "name": "GetFisData", "level": "LOG", "match": { "0": "0xDE", "1": "0x02" } },
-                { "name": "GetFisExtStatus", "level": "LOG", "match": { "0": "0xDE", "1": "0x03" } }
+                { "name": "GetFisExtStatus", "level": "LOG", "match": { "0": "0xDE", "1": "0x03" } },
+                { "name": "GetFisReserved4", "level": "LOG", "match": { "0": "0xDE", "1": "0x04" } },
+                { "name": "GetFisReserved5", "level": "LOG", "match": { "0": "0xDE", "1": "0x05" } },
+                { "name": "GetFisReserved6", "level": "LOG", "match": { "0": "0xDE", "1": "0x06" } },
+                { "name": "GetFisReserved7", "level": "LOG", "match": { "0": "0xDE", "1": "0x07" } },
+                { "name": "GetFisReserved8", "level": "LOG", "match": { "0": "0xDE", "1": "0x08" } },
+                { "name": "GetFisReserved9", "level": "LOG", "match": { "0": "0xDE", "1": "0x09" } }
             ]
         },
         "0xED": {
