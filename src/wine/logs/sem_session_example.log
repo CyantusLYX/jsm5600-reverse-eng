@@ -1,0 +1,2 @@
+2026-02-01 10:00:00.123 [INFO] [CMD] SetSpeed             | CDB: 00 01 00 04          | DATA: [Empty] -> Status=1
+2026-02-01 10:00:01.456 [WARN] [CMD] SetHT                | CDB: 02 01 00 07          | DATA: [Empty] -> Status=4

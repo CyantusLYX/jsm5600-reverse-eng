@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SEM32 Bridge Log Viewer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    colors: {
+                        gray: {
+                            900: '#111827',
+                            800: '#1f2937',
+                            700: '#374151',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { background-color: #0f172a; color: #e2e8f0; }
+        .log-row:hover { background-color: #1e293b; }
+        .level-LOG { color: #94a3b8; }
+        .level-INFO { color: #60a5fa; }
+        .level-WARN { color: #facc15; }
+        .level-ERR { color: #f87171; font-weight: bold; }
+        .level-DBG { color: #a3e635; }
+        
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #475569; }
+    </style>
+</head>
+<body class="h-screen flex flex-col overflow-hidden">
+    <div id="app" class="flex h-full">
+        
+        <!-- Sidebar: Log Files -->
+        <div class="w-64 flex-none border-r border-gray-700 bg-gray-900 flex flex-col">
+            <div class="p-4 border-b border-gray-700">
+                <h1 class="text-lg font-bold text-white tracking-tight">SEM32 Log Viewer</h1>
+                <p class="text-xs text-gray-400 mt-1">Found {{ files.length }} log files</p>
+            </div>
+            <div class="flex-1 overflow-y-auto p-2">
+                <div v-if="loadingFiles" class="text-center text-sm text-gray-500 py-4">Loading...</div>
+                <div v-for="file in files" :key="file" 
+                     @click="selectFile(file)"
+                     class="cursor-pointer px-3 py-2 rounded text-sm mb-1 transition-colors"
+                     :class="currentFile === file ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-300 hover:bg-gray-800'">
+                    {{ file }}
+                </div>
+            </div>
+            <div class="p-3 border-t border-gray-700 text-xs text-gray-500 text-center">
+                Protocol: {{ protocolLoaded ? 'Loaded' : 'Missing' }}
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="flex-1 flex flex-col min-w-0 bg-gray-800">
+            
+            <!-- Toolbar -->
+            <div class="h-16 border-b border-gray-700 bg-gray-900 flex items-center px-4 space-x-4 shadow-sm z-10">
+                
+                <!-- Search -->
+                <div class="relative flex-1 max-w-lg">
+                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <svg class="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                    </div>
+                    <input type="text" v-model="searchQuery" 
+                           class="block w-full pl-10 pr-3 py-1.5 border border-gray-600 rounded-md leading-5 bg-gray-800 text-gray-200 placeholder-gray-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 sm:text-sm" 
+                           placeholder="Search logs (Regex supported)...">
+                </div>
+
+                <!-- Filters -->
+                <div class="flex items-center space-x-3 text-sm">
+                    <label class="flex items-center space-x-1 cursor-pointer">
+                        <input type="checkbox" v-model="filters.LOG" class="rounded bg-gray-700 border-gray-600 text-blue-500 focus:ring-blue-500">
+                        <span class="text-gray-400">LOG</span>
+                    </label>
+                    <label class="flex items-center space-x-1 cursor-pointer">
+                        <input type="checkbox" v-model="filters.INFO" class="rounded bg-gray-700 border-gray-600 text-blue-500 focus:ring-blue-500">
+                        <span class="text-blue-400">INFO</span>
+                    </label>
+                    <label class="flex items-center space-x-1 cursor-pointer">
+                        <input type="checkbox" v-model="filters.WARN" class="rounded bg-gray-700 border-gray-600 text-blue-500 focus:ring-blue-500">
+                        <span class="text-yellow-400">WARN</span>
+                    </label>
+                    <label class="flex items-center space-x-1 cursor-pointer">
+                        <input type="checkbox" v-model="filters.ERR" class="rounded bg-gray-700 border-gray-600 text-blue-500 focus:ring-blue-500">
+                        <span class="text-red-400">ERR</span>
+                    </label>
+                </div>
+                
+                <!-- Refresh -->
+                 <button @click="refreshLog" class="p-2 rounded-full hover:bg-gray-700 text-gray-400 transition-colors" title="Reload File">
+                    <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                </button>
+            </div>
+
+            <!-- Log Table -->
+            <div class="flex-1 overflow-auto bg-gray-900 border-t border-gray-800">
+                <div v-if="loadingLogs" class="p-8 text-center text-gray-500">Loading log entries...</div>
+                <div v-else-if="!currentFile" class="p-10 text-center text-gray-500 flex flex-col items-center">
+                    <svg class="w-16 h-16 mb-4 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    <p>Select a log file to view details</p>
+                </div>
+                <table v-else class="w-full text-left border-collapse">
+                    <thead class="sticky top-0 bg-gray-800 z-10 shadow-sm text-xs uppercase text-gray-400 font-semibold tracking-wider">
+                        <tr>
+                            <th class="px-4 py-3 w-32 border-b border-gray-700">Timestamp</th>
+                            <th class="px-2 py-3 w-16 border-b border-gray-700">Level</th>
+                            <th class="px-2 py-3 w-16 border-b border-gray-700">Dir</th>
+                            <th class="px-4 py-3 w-48 border-b border-gray-700">Command</th>
+                            <th class="px-4 py-3 border-b border-gray-700 w-64">CDB</th>
+                            <th class="px-4 py-3 border-b border-gray-700">Data / Info</th>
+                            <th class="px-2 py-3 w-20 border-b border-gray-700 text-right">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody class="text-sm font-mono divide-y divide-gray-800">
+                        <tr v-for="(entry, index) in filteredLogs" :key="index" class="log-row transition-colors">
+                            <td class="px-4 py-1.5 text-gray-500 whitespace-nowrap text-xs">{{ entry.time }}</td>
+                            <td class="px-2 py-1.5 font-bold text-xs" :class="'level-' + entry.level.trim()">{{ entry.level }}</td>
+                            <td class="px-2 py-1.5 text-gray-300">{{ entry.dir }}</td>
+                            <td class="px-4 py-1.5 text-white font-medium truncate" :title="entry.cmd">{{ entry.cmd }}</td>
+                            <td class="px-4 py-1.5 text-gray-500 text-xs truncate max-w-xs" :title="entry.cdb">{{ entry.cdb }}</td>
+                            <td class="px-4 py-1.5 text-gray-400 truncate max-w-md" :title="entry.data">{{ entry.data }}</td>
+                            <td class="px-2 py-1.5 text-right font-bold" 
+                                :class="entry.status == '0' || entry.status == '1' ? 'text-green-500' : 'text-red-500'">
+                                {{ entry.status }}
+                            </td>
+                        </tr>
+                        <tr v-if="filteredLogs.length === 0">
+                            <td colspan="7" class="p-8 text-center text-gray-500">
+                                No entries match your filters.
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- Footer Status -->
+            <div class="h-8 bg-gray-900 border-t border-gray-700 flex items-center px-4 text-xs text-gray-500 justify-between">
+                <span>Showing {{ filteredLogs.length }} of {{ logs.length }} entries</span>
+                <span>{{ currentFile }}</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp, ref, computed, onMounted } = Vue
+        
+        createApp({
+            setup() {
+                const files = ref([])
+                const currentFile = ref(null)
+                const logs = ref([])
+                const loadingFiles = ref(false)
+                const loadingLogs = ref(false)
+                const searchQuery = ref('')
+                const protocolLoaded = ref(false)
+                
+                const filters = ref({
+                    LOG: false,   // Default hide polling logs
+                    INFO: true,
+                    WARN: true,
+                    ERR: true,
+                    DBG: true
+                })
+
+                const loadFiles = async () => {
+                    loadingFiles.value = true
+                    try {
+                        const res = await fetch('/api/logs')
+                        files.value = await res.json()
+                    } catch (e) {
+                        console.error(e)
+                    } finally {
+                        loadingFiles.value = false
+                    }
+                }
+
+                const selectFile = async (filename) => {
+                    currentFile.value = filename
+                    await refreshLog()
+                }
+                
+                const refreshLog = async () => {
+                    if (!currentFile.value) return;
+                    loadingLogs.value = true
+                    try {
+                        const res = await fetch(`/api/logs/${currentFile.value}`)
+                        logs.value = await res.json()
+                    } catch (e) {
+                        console.error(e)
+                    } finally {
+                        loadingLogs.value = false
+                    }
+                }
+
+                const filteredLogs = computed(() => {
+                    const q = searchQuery.value.toLowerCase()
+                    return logs.value.filter(entry => {
+                        // Level Filter
+                        const lvl = entry.level.trim()
+                        // Map unknown levels to INFO or define generic
+                        if (filters.value[lvl] === false) return false;
+                        
+                        // Search Filter (Regex capable or simple)
+                        if (!q) return true;
+                        
+                        // Simple check first
+                        if (entry.cmd.toLowerCase().includes(q) || 
+                            entry.data.toLowerCase().includes(q) ||
+                            entry.cdb.toLowerCase().includes(q)) return true;
+                            
+                        return false
+                    })
+                })
+                
+                const checkProtocol = async () => {
+                    try {
+                        const res = await fetch('/api/protocol')
+                        protocolLoaded.value = res.ok
+                    } catch{ protocolLoaded.value = false }
+                }
+
+                onMounted(() => {
+                    loadFiles()
+                    checkProtocol()
+                })
+
+                return {
+                    files, currentFile, logs, loadingFiles, loadingLogs,
+                    searchQuery, filters, filteredLogs, selectFile, refreshLog, protocolLoaded
+                }
+            }
+        }).mount('#app')
+    </script>
+</body>
+</html>
