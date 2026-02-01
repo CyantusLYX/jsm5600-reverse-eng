@@ -242,41 +242,49 @@
 
 ---
 
-## [0xE0] 大數據寫入 (Large Data Write)
-- **寫入 LUT (Write LUT)**: `[E0 00 (sub) 00 00 00 01 00 00 00]`
-  - 用於平均化查找表 (Average Look-Up Tables)
-  - Sub參數：
-    - `0`: 主掃描LUT (SCAN)
-    - `1`: SCAN1 LUT
-    - `2`: SCAN2 LUT
-    - `3`: SCAN3 LUT
-  - Payload: 64KB (0x10000 bytes) buffer
+## [0xFA] 通用封裝 (Generic 10-byte Wrapper)
+- **Opcode**: `0xFA`
+- **結構**: `[FA 00 00 00 00 00 00 00 len_high len_low]`
+- 常用於發送 Mode 1 指令的 10 字節 CDB 封裝。
 
 ---
 
+## [0xED] 大數據讀取 (Large Data Read)
+- **Save Sem Data**: `[ED 82 ...]` (Length 0x1418)
+- **Save Auto Data**: `[ED 84 ...]`
+
+---
+
+## [0xC2 / 0xC3] 特殊模式轉發 (Legacy Passthrough)
+由 `FUN_10021aee` 在處理特定 Group 0 指令時動態生成：
+- **0xC2**: 用於 `sub_opcode < 3` 或 `sub_opcode == 0x10` 的情況。
+- **0xC3**: 用於 `sub_opcode < 0x0B` 的情況。
+
 ### 2. 電子槍與高壓 (Group C6 / C7)
 - **HT Status**: `[C6 10 00 04]`
+- **HT Status (Alt)**: `[C6 19 00 04]`
 - **Accv Status**: `[C6 11 00 04]`
 - **Fila Value**: `[C6 12 00 04]`
 - **Bias Crs/Fine**: `[C6 13/14 00 04]`
 - **Emission Current**: `[C6 15 00 04]`
 - **Fila Lamp**: `[C6 16 00 04]`
 - **Fila DA**: `[C6 17 00 04]`
-- **Gun Status**: `[C7 00 00 12]`
+- **Gun Status (LBG)**: `[C7 00 00 12]` (18 bytes payload)
 
 ### 3. 光學與影像狀態 (Group C8)
 - **倍率索引 (Mag)**: `[C8 50 00 04]`
-- **CL Value**: `[C8 30 00 04]`
+- **CL Value (Extended)**: `[C8 30 00 04]`
 - **OL Crs Raw**: `[C8 32 00 04]`
 - **OL Crs/Fine**: `[C8 32/33 00 04]`
-- **OL Wobbler**: `[C8 37 00 04]`
-- **WD Value**: `[C8 38 00 04]`
-- **Stig X/Y**: `[C8 40/41 00 04]`
-- **Fine Shift X**: `[C8 60 00 04]`
-- **Fine Shift Y**: `[C8 61 00 04]`
+- **物鏡晃動器 (OL Wobbler)**: `[C8 37 00 04]`
+- **工作距離 (WD Value)**: `[C8 38 00 04]`
+- **消像散 (Stig X/Y)**: `[C8 40/41 00 04]`
+- **影像位移 (Fine Shift X/Y)**: `[C8 60/61 00 04]`
 - **影像訊號源 (IMS)**: `[C8 82 00 04]`
+- **電子束遮斷 (Beam Blank)**: `[C8 24 00 04]`
+- **動態聚焦 (DFU)**: `[C8 36 00 04]`
 - **AFC Alin X/Y**: `[C8 62/63 00 04]`
-- **AFC 數值**: `[C8 70 00 04]`
+- **AFC Value**: `[C8 70 00 04]`
 - **AFC Wobbler**: `[C8 71 00 04]`
 - **Brightness**: `[C8 81 00 04]`
 - **Contrast**: `[C8 80 00 04]`
@@ -301,8 +309,11 @@
 - **Stage Status**: `[CB E5 00 04]`
 - **Stage Coords**: `[CB E6 00 1E]`
 
-### 6. 接口與識別 (Group CC / CE)
+### 6. 接口與識別 (Group CC / CE / DE)
 - **硬體 ID**: `[CC 81 00 04]`
+- **Status Size/Count**: `[CC 80 00 04]`
+- **FIS 版本**: `[DE 00 00 00 18 00]`
+- **FIS 狀態**: `[DE 01 00 00 18 00]`
 - **ROM 版本**:
   - **Mode 0**: `[group 00 00 02 6F sub]`
     - Groups: `0, 4, 3, 2, 1, 6, 5, 8, 7`
@@ -317,10 +328,11 @@
 - **VSITF 狀態**: `[CE 00 00 04]`
 - **Vent Lock Mode**: `[CE 01 00 04]`
 - **ESITF 狀態**: `[CE 02 00 04]`
-- **ESITF Ext**: `[CE 03 00 04]`
-- **ESITF Ch**: `[CE 04 00 04]`
-- **ESITF Port**: `[CE 05 00 04]`
+- **ESITF 擴展**: `[CE 03 00 04]`
+- **ESITF 通道**: `[CE 04 00 04]`
+- **ESITF 端口**: `[CE 05 00 04]`
 - **PCD 狀態**: `[CE 08 00 04]`
+- **BCX 狀態**: `[CE 0B 00 04]`
 - **SCS 模式**: `[CE 0C 00 04]`
 - **EBSD 狀態**: `[CE 0D 00 04]`
 - **EBSD Mode**: `[CE 0E 00 04]`
