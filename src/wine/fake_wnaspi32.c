@@ -285,7 +285,7 @@ DWORD __cdecl SendASPI32Command(PSRB srb_ptr) {
 
         header->SRB_Status = (status == SS_COMP) ? SS_COMP : SS_ERR;
         cmd->SRB_HaStat = 0;
-        cmd->SRB_TgtStat = status;
+        cmd->SRB_TgtStat = (status == SS_COMP) ? 0 : status;
         
         // Handle PostProc (Event or Callback)
         if (cmd->SRB_Flags & SRB_EVENT_NOTIFY) { 
