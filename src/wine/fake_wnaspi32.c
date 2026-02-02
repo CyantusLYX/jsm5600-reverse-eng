@@ -9,6 +9,34 @@
 #include <stdarg.h>
 #include "wnaspi32.h"
 
+#pragma pack(1)
+typedef struct {
+    BYTE  SRB_Cmd;
+    BYTE  SRB_Status;
+    BYTE  SRB_HaId;
+    BYTE  SRB_Flags;
+    DWORD SRB_Hdr_Rsvd;
+    BYTE  HA_Count;
+    BYTE  HA_SCSI_ID;
+    BYTE  HA_ManagerId[16];
+    BYTE  HA_Identifier[16];
+    BYTE  HA_Unique[16];
+    WORD  HA_Rsvd1;
+} SRB_HAInquiry, *PSRB_HAInquiry;
+
+typedef struct {
+    BYTE  SRB_Cmd;
+    BYTE  SRB_Status;
+    BYTE  SRB_HaId;
+    BYTE  SRB_Flags;
+    DWORD SRB_Hdr_Rsvd;
+    BYTE  SRB_Target;
+    BYTE  SRB_Lun;
+    BYTE  SRB_DeviceType;
+    BYTE  SRB_Rsvd1;
+} SRB_GDEVBlock, *PSRB_GDEVBlock;
+#pragma pack()
+
 BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved) {
     if (fdwReason == DLL_PROCESS_ATTACH) {
         // We can't use LogMsg easily here if it depends on winsock not init yet?
@@ -108,8 +136,23 @@ DWORD __cdecl SendASPI32Command(PSRB srb_ptr) {
     header->SRB_Status = SS_PENDING;
 
     if (header->SRB_Cmd == SC_HA_INQUIRY) {
-        // Return dummy inquiry data
-        header->SRB_Status = SS_COMP;
+        PSRB_HAInquiry inq = (PSRB_HAInquiry)srb_ptr;
+        memset(inq, 0, sizeof(*inq));
+        inq->SRB_Cmd = SC_HA_INQUIRY;
+        inq->SRB_Status = SS_COMP;
+        inq->SRB_HaId = 0;
+        inq->HA_Count = 1;
+        inq->HA_SCSI_ID = 7;
+        memcpy(inq->HA_ManagerId, "FakeASPI", 8);
+        memcpy(inq->HA_Identifier, "JEOL SEM", 8);
+        memcpy(inq->HA_Unique, "VSEM", 4);
+        return SS_COMP;
+    }
+
+    if (header->SRB_Cmd == SC_GET_DEV_TYPE) {
+        PSRB_GDEVBlock dev = (PSRB_GDEVBlock)srb_ptr;
+        dev->SRB_Status = SS_COMP;
+        dev->SRB_DeviceType = 0x03;
         return SS_COMP;
     }
 
@@ -241,6 +284,7 @@ DWORD __cdecl SendASPI32Command(PSRB srb_ptr) {
         }
 
         header->SRB_Status = (status == SS_COMP) ? SS_COMP : SS_ERR;
+        cmd->SRB_HaStat = 0;
         cmd->SRB_TgtStat = status;
         
         // Handle PostProc (Event or Callback)
