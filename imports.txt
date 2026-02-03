@@ -1,0 +1,418 @@
+
+extracted/binaries/Jsm5000.exe      檔案格式 pei-i386
+
+Characteristics 0x10f
+	relocations stripped
+	executable
+	line numbers stripped
+	symbols stripped
+	32 bit words
+
+Time/Date		Wed Jan 19 12:54:34 2005
+Magic			010b	(PE32)
+MajorLinkerVersion	6
+MinorLinkerVersion	0
+SizeOfCode		001f6000
+SizeOfInitializedData	00028000
+SizeOfUninitializedData	00000000
+AddressOfEntryPoint	0000f6b4
+BaseOfCode		00001000
+BaseOfData		001f7000
+ImageBase		00400000
+SectionAlignment	00001000
+FileAlignment		00001000
+MajorOSystemVersion	4
+MinorOSystemVersion	0
+MajorImageVersion	3
+MinorImageVersion	12
+MajorSubsystemVersion	4
+MinorSubsystemVersion	0
+Win32Version		00000000
+SizeOfImage		0021f000
+SizeOfHeaders		00001000
+CheckSum		0020ca87
+Subsystem		00000002	(Windows GUI)
+DllCharacteristics	00000000
+SizeOfStackReserve	00100000
+SizeOfStackCommit	00001000
+SizeOfHeapReserve	00100000
+SizeOfHeapCommit	00001000
+LoaderFlags		00000000
+NumberOfRvaAndSizes	00000010
+
+The Data Directory
+Entry 0 00000000 00000000 Export Directory [.edata (or where ever we found it)]
+Entry 1 001f5784 00000028 Import Directory [parts of .idata]
+Entry 2 0020b000 00013c52 Resource Directory [.rsrc]
+Entry 3 00000000 00000000 Exception Directory [.pdata]
+Entry 4 00000000 00000000 Security Directory
+Entry 5 00000000 00000000 Base Relocation Directory [.reloc]
+Entry 6 00000000 00000000 Debug Directory
+Entry 7 00000000 00000000 Description Directory
+Entry 8 00000000 00000000 Special Directory
+Entry 9 00000000 00000000 Thread Storage Directory [.tls]
+Entry a 00000000 00000000 Load Configuration Directory
+Entry b 00000228 00000020 Bound Import Directory
+Entry c 00001000 0000035c Import Address Table Directory
+Entry d 00000000 00000000 Delay Import Directory
+Entry e 00000000 00000000 CLR Runtime Header
+Entry f 00000000 00000000 Reserved
+
+There is an import table in .text at 0x5f5784
+
+The Import Tables (interpreted .text section contents)
+ vma:            Hint    Time      Forward  DLL       First
+                 Table   Stamp     Chain    Name      Thunk
+ 001f5784	001f57ac ffffffff ffffffff 001f5b08 00001000
+
+	DLL Name: MSVBVM60.DLL
+	vma:     Ordinal  Hint  Member-Name  Bound-To
+	00001000  <none>  0000  __vbaVarSub	6610782a
+	00001004    582  <none> <none>	660dc040
+	00001008    583  <none> <none>	660dc069
+	0000100c  <none>  0000  __vbaStrI2	660df9b9
+	00001010  <none>  0000  _CIcos	660f8806
+	00001014  <none>  0000  _adj_fptan	660efe79
+	00001018  <none>  0000  __vbaStrI4	660df9e9
+	0000101c  <none>  0000  __vbaVarMove	66106b2e
+	00001020  <none>  0000  __vbaVarVargNofree	661072cd
+	00001024  <none>  0000  __vbaAryMove	660cc164
+	00001028  <none>  0000  __vbaFpCDblR4	6610765b
+	0000102c  <none>  0000  __vbaFreeVar	660fea4c
+	00001030  <none>  0000  __vbaStrVarMove	660e0ddb
+	00001034  <none>  0000  __vbaLineInputStr	660d2a43
+	00001038  <none>  0000  __vbaGosubReturn	66103d30
+	0000103c  <none>  0000  __vbaLateIdCall	66108bb4
+	00001040    588  <none> <none>	660dc14e
+	00001044  <none>  0000  __vbaLenBstr	660e5f5f
+	00001048  <none>  0000  __vbaEnd	660cbda8
+	0000104c  <none>  0000  __vbaFreeVarList	661072a2
+	00001050  <none>  0000  _adj_fdiv_m64	660ef73a
+	00001054  <none>  0000  __vbaFpCDblR8	6610765b
+	00001058  <none>  0000  __vbaPut4	660e4bf7
+	0000105c  <none>  0000  __vbaFreeObjList	660d9a3b
+	00001060    516  <none> <none>	660e657b
+	00001064  <none>  0000  __vbaStrErrVarCopy	660e0f2e
+	00001068  <none>  0000  _adj_fprem1	660efdc1
+	0000106c  <none>  0000  __vbaRecAnsiToUni	660dad4b
+	00001070    518  <none> <none>	660e6a64
+	00001074  <none>  0000  __vbaCopyBytes	660d9b6b
+	00001078  <none>  0000  __vbaVarCmpNe	66109997
+	0000107c  <none>  0000  __vbaStrCat	660e5f3a
+	00001080  <none>  0000  __vbaLsetFixstr	660e6ba9
+	00001084  <none>  0000  __vbaWriteFile	660d4c6d
+	00001088    660  <none> <none>	660f58ab
+	0000108c  <none>  0000  __vbaRecDestruct	660dacb8
+	00001090  <none>  0000  __vbaSetSystemError	660cc25a
+	00001094  <none>  0000  __vbaLenBstrB	660e6143
+	00001098  <none>  0000  __vbaNameFile	660d5f7c
+	0000109c  <none>  0000  __vbaHresultCheckObj	660d9cec
+	000010a0  <none>  0000  _adj_fdiv_m32	660ef6ee
+	000010a4  <none>  0000  __vbaAryDestruct	660db6bf
+	000010a8  <none>  0000  __vbaLateMemSt	66108cb5
+	000010ac    592  <none> <none>	660dcbbe
+	000010b0  <none>  0000  __vbaVarForInit	6610940c
+	000010b4  <none>  0000  __vbaExitProc	660e3f0d
+	000010b8    300  <none> <none>	660f5290
+	000010bc  <none>  0000  __vbaI4Abs	660e41c8
+	000010c0  <none>  0000  __vbaCyAdd	660e8bd7
+	000010c4    595  <none> <none>	660dc5f3
+	000010c8  <none>  0000  __vbaOnError	660e3e62
+	000010cc  <none>  0000  __vbaObjSet	660d9a69
+	000010d0  <none>  0000  _adj_fdiv_m16i	660ef786
+	000010d4    303  <none> <none>	660f52e6
+	000010d8    597  <none> <none>	660dc303
+	000010dc  <none>  0000  __vbaObjSetAddref	660d9a80
+	000010e0  <none>  0000  _adj_fdivr_m16i	660ef886
+	000010e4  <none>  0000  __vbaVarIndexLoad	660db8fc
+	000010e8    598  <none> <none>	660cdc7e
+	000010ec    599  <none> <none>	660ccf03
+	000010f0  <none>  0000  __vbaFpR4	661075c7
+	000010f4    306  <none> <none>	660f53c9
+	000010f8  <none>  0000  __vbaBoolVar	660e0225
+	000010fc    520  <none> <none>	660e6ae5
+	00001100    309  <none> <none>	660f54cf
+	00001104  <none>  0000  __vbaVarTstLt	661098b3
+	00001108  <none>  0000  __vbaBoolVarNull	661071c5
+	0000110c  <none>  0000  __vbaFpR8	661075db
+	00001110  <none>  0000  _CIsin	660f896e
+	00001114  <none>  0000  __vbaErase	660db5be
+	00001118    709  <none> <none>	660f7719
+	0000111c    631  <none> <none>	660e64a6
+	00001120    525  <none> <none>	660e7226
+	00001124  <none>  0000  __vbaChkstk	660f576a
+	00001128  <none>  0000  __vbaCyVar	660e4302
+	0000112c  <none>  0000  __vbaFileClose	660d3cf7
+	00001130    526  <none> <none>	660e7268
+	00001134  <none>  0000  __vbaGosubFree	66103d5b
+	00001138  <none>  0000  EVENT_SINK_AddRef	660c9a94
+	0000113c    528  <none> <none>	660e7417
+	00001140  <none>  0000  __vbaGenerateBoundsError	660db8d1
+	00001144  <none>  0000  __vbaCyI2	660e0e51
+	00001148    529  <none> <none>	660d58bb
+	0000114c  <none>  0000  __vbaStrCmp	660e8a03
+	00001150  <none>  0000  __vbaVarTstEq	66109836
+	00001154  <none>  0000  __vbaAryConstruct2	660dbb6f
+	00001158  <none>  0000  __vbaGet4	660e4bd9
+	0000115c  <none>  0000  __vbaR4Str	660e056c
+	00001160  <none>  0000  __vbaPrintObj	660d4bbb
+	00001164  <none>  0000  __vbaObjVar	660d9c21
+	00001168  <none>  0000  __vbaI2I4	660e0eba
+	0000116c  <none>  0000  DllFunctionCall	6600a019
+	00001170    563  <none> <none>	660dbfc6
+	00001174  <none>  0000  __vbaVarOr	661095f2
+	00001178  <none>  0000  __vbaFpUI1	66107574
+	0000117c  <none>  0000  __vbaCastObjVar	660d9bf3
+	00001180  <none>  0000  __vbaLbound	660dbae9
+	00001184  <none>  0000  __vbaRedimPreserve	660db7fa
+	00001188  <none>  0000  __vbaStrR4	660dfa19
+	0000118c  <none>  0000  _adj_fpatan	660efe76
+	00001190  <none>  0000  __vbaR4Var	660e4317
+	00001194  <none>  0000  __vbaFixstrConstruct	660e8a85
+	00001198  <none>  0000  __vbaLateIdCallLd	66108b65
+	0000119c  <none>  0000  __vbaUI1Cy	6610760e
+	000011a0  <none>  0000  __vbaR8Cy	660e0e81
+	000011a4  <none>  0000  __vbaRedim	660db7cb
+	000011a8  <none>  0000  __vbaStrR8	660dfa4d
+	000011ac  <none>  0000  __vbaRecUniToAnsi	660dad11
+	000011b0  <none>  0000  EVENT_SINK_Release	660c9aa7
+	000011b4    600  <none> <none>	660ccd88
+	000011b8    601  <none> <none>	66103b44
+	000011bc  <none>  0000  __vbaUI1I2	660e0e8e
+	000011c0  <none>  0000  _CIsqrt	660f8a13
+	000011c4  <none>  0000  __vbaObjIs	660d9240
+	000011c8  <none>  0000  __vbaLateIdCallSt	66108b9d
+	000011cc  <none>  0000  EVENT_SINK_QueryInterface	660c99a5
+	000011d0  <none>  0000  __vbaFpCmpCy	66107672
+	000011d4  <none>  0000  __vbaStrUI1	660df986
+	000011d8  <none>  0000  __vbaUI1I4	660e0ea4
+	000011dc  <none>  0000  __vbaExceptHandler	660e3ca4
+	000011e0  <none>  0000  __vbaStrToUnicode	660cbe3d
+	000011e4  <none>  0000  __vbaInputFile	660d37d2
+	000011e8  <none>  0000  __vbaPrintFile	660d4c1d
+	000011ec    606  <none> <none>	660e7293
+	000011f0  <none>  0000  _adj_fprem	660efb09
+	000011f4  <none>  0000  _adj_fdivr_m64	660ef83a
+	000011f8  <none>  0000  __vbaLateIdStAd	66108be6
+	000011fc  <none>  0000  __vbaGosub	66103d07
+	00001200  <none>  0000  __vbaI2Str	660e04df
+	00001204    608  <none> <none>	660e0408
+	00001208    531  <none> <none>	660d5803
+	0000120c    716  <none> <none>	660d93c0
+	00001210  <none>  0000  __vbaFPException	66107553
+	00001214    717  <none> <none>	660e8456
+	00001218    532  <none> <none>	660d5814
+	0000121c  <none>  0000  __vbaInStrVar	660e6851
+	00001220  <none>  0000  __vbaUbound	660dbb1b
+	00001224    533  <none> <none>	660d6041
+	00001228  <none>  0000  __vbaStrVarVal	660e0dfa
+	0000122c    534  <none> <none>	660dbbd6
+	00001230  <none>  0000  __vbaVarCat	660e5e41
+	00001234    535  <none> <none>	660dbd1e
+	00001238  <none>  0000  __vbaLsetFixstrFree	660e6cb7
+	0000123c  <none>  0000  __vbaI2Var	660e42e6
+	00001240    537  <none> <none>	660e0370
+	00001244    645  <none> <none>	660d4f71
+	00001248  <none>  0000  _CIlog	660f88ab
+	0000124c  <none>  0000  __vbaErrorOverflow	660ce3ee
+	00001250  <none>  0000  __vbaFileOpen	660d388a
+	00001254  <none>  0000  __vbaVar2Vec	66103c1d
+	00001258  <none>  0000  __vbaInStr	6601af68
+	0000125c    648  <none> <none>	660d3def
+	00001260  <none>  0000  __vbaR8Str	660e059c
+	00001264  <none>  0000  __vbaNew2	660d9caf
+	00001268  <none>  0000  __vbaCyMulI2	660e8ae1
+	0000126c    571  <none> <none>	660d3eac
+	00001270  <none>  0000  _adj_fdiv_m32i	660ef7ba
+	00001274  <none>  0000  _adj_fdivr_m32i	660ef8ba
+	00001278  <none>  0000  __vbaStrCopy	660e610e
+	0000127c    681  <none> <none>	660dcfa4
+	00001280  <none>  0000  __vbaI4Str	660e0510
+	00001284  <none>  0000  __vbaFreeStrList	660e60c5
+	00001288    576  <none> <none>	660d5a87
+	0000128c  <none>  0000  _adj_fdivr_m32	660ef7ee
+	00001290    577  <none> <none>	660d5ca7
+	00001294  <none>  0000  __vbaPowerR8	660e067c
+	00001298  <none>  0000  _adj_fdiv_r	660ef229
+	0000129c    685  <none> <none>	660de42f
+	000012a0    100  <none> <none>	6600357c
+	000012a4  <none>  0000  __vbaVarTstNe	6610984f
+	000012a8  <none>  0000  __vbaVarSetVar	660d9b3f
+	000012ac  <none>  0000  __vbaI4Var	660e42f4
+	000012b0  <none>  0000  __vbaVarCmpEq	66109962
+	000012b4  <none>  0000  __vbaFpCy	661075ef
+	000012b8    610  <none> <none>	660d1e33
+	000012bc  <none>  0000  __vbaAryLock	660dbb9a
+	000012c0  <none>  0000  __vbaLateMemCall	66108cf8
+	000012c4  <none>  0000  __vbaVarAdd	66107801
+	000012c8    612  <none> <none>	660d1e75
+	000012cc  <none>  0000  __vbaVarDup	66106e36
+	000012d0  <none>  0000  __vbaStrToAnsi	6600a1b2
+	000012d4  <none>  0000  __vbaVerifyVarObj	660d9bca
+	000012d8  <none>  0000  __vbaAryVarVarg	66107524
+	000012dc    614  <none> <none>	660dc12f
+	000012e0  <none>  0000  __vbaFpI2	66107599
+	000012e4  <none>  0000  __vbaVarCopy	66106bf8
+	000012e8  <none>  0000  __vbaVarLateMemCallLd	66108dcc
+	000012ec    616  <none> <none>	660e625e
+	000012f0  <none>  0000  __vbaFpI4	661075b0
+	000012f4  <none>  0000  __vbaLateMemCallLd	66108c8d
+	000012f8  <none>  0000  __vbaRecDestructAnsi	660dad85
+	000012fc    617  <none> <none>	660e6271
+	00001300  <none>  0000  _CIatan	660f8740
+	00001304  <none>  0000  __vbaUI1Str	660e0e1f
+	00001308    618  <none> <none>	660e6362
+	0000130c  <none>  0000  __vbaStrMove	660e60f4
+	00001310  <none>  0000  __vbaCastObj	66105f1d
+	00001314  <none>  0000  __vbaStrVarCopy	660dfaf8
+	00001318    619  <none> <none>	660e6375
+	0000131c  <none>  0000  _allmul	660ee36d
+	00001320  <none>  0000  __vbaLenVarB	660e5fde
+	00001324  <none>  0000  __vbaLateIdSt	66108b84
+	00001328    652  <none> <none>	660dbbf2
+	0000132c  <none>  0000  _CItan	660f8ac4
+	00001330  <none>  0000  __vbaAryUnlock	660dbbbd
+	00001334  <none>  0000  __vbaUI1Var	660e42d8
+	00001338  <none>  0000  __vbaVarForNext	6610943a
+	0000133c  <none>  0000  __vbaFpCSngR8	66107644
+	00001340  <none>  0000  _CIexp	660ed191
+	00001344  <none>  0000  __vbaI4ErrVar	660e42ed
+	00001348  <none>  0000  __vbaRecAssign	660dacd5
+	0000134c  <none>  0000  __vbaFreeObj	660d9a27
+	00001350  <none>  0000  __vbaFreeStr	660e60b0
+	00001354    581  <none> <none>	660d2dd4
+
+ 001f5798	00000000 00000000 00000000 00000000 00000000
+
+The .rsrc Resource Directory section:
+000  Type Table: Char: 0, Time: 41ede808, Ver: 2/12, Num Names: 0, IDs: 7
+010   Entry: ID: 0x000001, Value: 0x80000598
+598    Name Table: Char: 0, Time: 41ede808, Ver: 2/12, Num Names: 0, IDs: 29
+5a8     Entry: ID: 0x000001, Value: 0x80001888
+1888      Language Table: Char: 0, Time: 41ede808, Ver: 2/12, Num Names: 0, IDs: 1
+1898       Entry: ID: 00000000, Value: 0x002538
+2538        Leaf: Addr: 0x21b3d6, Size: 0x000134, Codepage: 1200
+5b0     Entry: ID: 0x000002, Value: 0x80001870
+1870      Language Table: Char: 0, Time: 41ede808, Ver: 2/12, Num Names: 0, IDs: 1
+1880       Entry: ID: 00000000, Value: 0x002528
+2528        Leaf: Addr: 0x21b2a2, Size: 0x000134, Codepage: 1200
+5b8     Entry: ID: 0x000003, Value: 0x80001858
+1858      Language Table: Char: 0, Time: 41ede808, Ver: 2/12, Num Names: 0, IDs: 1
+1868       Entry: ID: 00000000, Value: 0x002518
+2518        Leaf: Addr: 0x21b16e, Size: 0x000134, Codepage: 1200
+5c0     Entry: ID: 0x000004, Value: 0x80001840
+1840      Language Table: Char: 0, Time: 41ede808, Ver: 2/12, Num Names: 0, IDs: 1
+1850       Entry: ID: 00000000, Value: 0x002508
+2508        Leaf: Addr: 0x21b03a, Size: 0x000134, Codepage: 1200
+5c8     Entry: ID: 0x000005, Value: 0x80001828
+1828      Language Table: Char: 0, Time: 41ede808, Ver: 2/12, Num Names: 0, IDs: 1
+1838       Entry: ID: 00000000, Value: 0x0024f8
+24f8        Leaf: Addr: 0x21af06, Size: 0x000134, Codepage: 1200
+5d0     Entry: ID: 0x000006, Value: 0x80001810
+1810      Language Table: Char: 0, Time: 41ede808, Ver: 2/12, Num Names: 0, IDs: 1
+1820       Entry: ID: 00000000, Value: 0x0024e8
+24e8        Leaf: Addr: 0x21add2, Size: 0x000134, Codepage: 1200
+5d8     Entry: ID: 0x000007, Value: 0x800017f8
+17f8      Language Table: Char: 0, Time: 41ede808, Ver: 2/12, Num Names: 0, IDs: 1
+1808       Entry: ID: 00000000, Value: 0x0024d8
+24d8        Leaf: Addr: 0x21ac9e, Size: 0x000134, Codepage: 1200
+5e0     Entry: ID: 0x000008, Value: 0x800017e0
+17e0      Language Table: Char: 0, Time: 41ede808, Ver: 2/12, Num Names: 0, IDs: 1
+17f0       Entry: ID: 00000000, Value: 0x0024c8
+24c8        Leaf: Addr: 0x21ab6a, Size: 0x000134, Codepage: 1200
+5e8     Entry: ID: 0x000009, Value: 0x800017c8
+17c8      Language Table: Char: 0, Time: 41ede808, Ver: 2/12, Num Names: 0, IDs: 1
+17d8       Entry: ID: 00000000, Value: 0x0024b8
+24b8        Leaf: Addr: 0x21aa36, Size: 0x000134, Codepage: 1200
+5f0     Entry: ID: 0x00000a, Value: 0x800017b0
+17b0      Language Table: Char: 0, Time: 41ede808, Ver: 2/12, Num Names: 0, IDs: 1
+17c0       Entry: ID: 00000000, Value: 0x0024a8
+24a8        Leaf: Addr: 0x21a902, Size: 0x000134, Codepage: 1200
+5f8     Entry: ID: 0x00000b, Value: 0x80001798
+1798      Language Table: Char: 0, Time: 41ede808, Ver: 2/12, Num Names: 0, IDs: 1
+17a8       Entry: ID: 00000000, Value: 0x002498
+2498        Leaf: Addr: 0x21a7ce, Size: 0x000134, Codepage: 1200
+600     Entry: ID: 0x00000c, Value: 0x80001780
+1780      Language Table: Char: 0, Time: 41ede808, Ver: 2/12, Num Names: 0, IDs: 1
+1790       Entry: ID: 00000000, Value: 0x002488
+2488        Leaf: Addr: 0x21a69a, Size: 0x000134, Codepage: 1200
+608     Entry: ID: 0x00000d, Value: 0x80001768
+1768      Language Table: Char: 0, Time: 41ede808, Ver: 2/12, Num Names: 0, IDs: 1
+1778       Entry: ID: 00000000, Value: 0x002478
+2478        Leaf: Addr: 0x21a566, Size: 0x000134, Codepage: 1200
+610     Entry: ID: 0x00000e, Value: 0x80001750
+1750      Language Table: Char: 0, Time: 41ede808, Ver: 2/12, Num Names: 0, IDs: 1
+1760       Entry: ID: 00000000, Value: 0x002468
+2468        Leaf: Addr: 0x21a432, Size: 0x000134, Codepage: 1200
+618     Entry: ID: 0x00000f, Value: 0x80001738
+1738      Language Table: Char: 0, Time: 41ede808, Ver: 2/12, Num Names: 0, IDs: 1
+1748       Entry: ID: 00000000, Value: 0x002458
+2458        Leaf: Addr: 0x21a2fe, Size: 0x000134, Codepage: 1200
+620     Entry: ID: 0x000010, Value: 0x80001720
+1720      Language Table: Char: 0, Time: 41ede808, Ver: 2/12, Num Names: 0, IDs: 1
+1730       Entry: ID: 00000000, Value: 0x002448
+2448        Leaf: Addr: 0x21a1ca, Size: 0x000134, Codepage: 1200
+628     Entry: ID: 0x000011, Value: 0x80001708
+1708      Language Table: Char: 0, Time: 41ede808, Ver: 2/12, Num Names: 0, IDs: 1
+1718       Entry: ID: 00000000, Value: 0x002438
+2438        Leaf: Addr: 0x21a096, Size: 0x000134, Codepage: 1200
+630     Entry: ID: 0x000012, Value: 0x800016f0
+16f0      Language Table: Char: 0, Time: 41ede808, Ver: 2/12, Num Names: 0, IDs: 1
+1700       Entry: ID: 00000000, Value: 0x002428
+2428        Leaf: Addr: 0x219f62, Size: 0x000134, Codepage: 1200
+638     Entry: ID: 0x000013, Value: 0x800016d8
+16d8      Language Table: Char: 0, Time: 41ede808, Ver: 2/12, Num Names: 0, IDs: 1
+16e8       Entry: ID: 00000000, Value: 0x002418
+2418        Leaf: Addr: 0x219e2e, Size: 0x000134, Codepage: 1200
+640     Entry: ID: 0x000014, Value: 0x800016c0
+16c0      Language Table: Char: 0, Time: 41ede808, Ver: 2/12, Num Names: 0, IDs: 1
+16d0       Entry: ID: 00000000, Value: 0x002408
+2408        Leaf: Addr: 0x219cfa, Size: 0x000134, Codepage: 1200
+648     Entry: ID: 0x000015, Value: 0x800016a8
+16a8      Language Table: Char: 0, Time: 41ede808, Ver: 2/12, Num Names: 0, IDs: 1
+16b8       Entry: ID: 00000000, Value: 0x0023f8
+23f8        Leaf: Addr: 0x219bc6, Size: 0x000134, Codepage: 1200
+650     Entry: ID: 0x000016, Value: 0x80001690
+1690      Language Table: Char: 0, Time: 41ede808, Ver: 2/12, Num Names: 0, IDs: 1
+16a0       Entry: ID: 00000000, Value: 0x0023e8
+23e8        Leaf: Addr: 0x219a92, Size: 0x000134, Codepage: 1200
+658     Entry: ID: 0x000017, Value: 0x80001678
+1678      Language Table: Char: 0, Time: 41ede808, Ver: 2/12, Num Names: 0, IDs: 1
+1688       Entry: ID: 00000000, Value: 0x0023d8
+23d8        Leaf: Addr: 0x21995e, Size: 0x000134, Codepage: 1200
+660     Entry: ID: 0x000018, Value: 0x80001660
+1660      Language Table: Char: 0, Time: 41ede808, Ver: 2/12, Num Names: 0, IDs: 1
+1670       Entry: ID: 00000000, Value: 0x0023c8
+23c8        Leaf: Addr: 0x21982a, Size: 0x000134, Codepage: 1200
+668     Entry: ID: 0x000019, Value: 0x80001648
+1648      Language Table: Char: 0, Time: 41ede808, Ver: 2/12, Num Names: 0, IDs: 1
+1658       Entry: ID: 00000000, Value: 0x0023b8
+23b8        Leaf: Addr: 0x2196f6, Size: 0x000134, Codepage: 1200
+670     Entry: ID: 0x00001a, Value: 0x80001630
+1630      Language Table: Char: 0, Time: 41ede808, Ver: 2/12, Num Names: 0, IDs: 1
+1640       Entry: ID: 00000000, Value: 0x0023a8
+23a8        Leaf: Addr: 0x2195c2, Size: 0x000134, Codepage: 1200
+678     Entry: ID: 0x00001b, Value: 0x80001618
+1618      Language Table: Char: 0, Time: 41ede808, Ver: 2/12, Num Names: 0, IDs: 1
+1628       Entry: ID: 00000000, Value: 0x002398
+2398        Leaf: Addr: 0x21948e, Size: 0x000134, Codepage: 1200
+680     Entry: ID: 0x00001c, Value: 0x80001600
+1600      Language Table: Char: 0, Time: 41ede808, Ver: 2/12, Num Names: 0, IDs: 1
+1610       Entry: ID: 00000000, Value: 0x002388
+2388        Leaf: Addr: 0x21935a, Size: 0x000134, Codepage: 1200
+688     Entry: ID: 0x00001d, Value: 0x800015e8
+15e8      Language Table: Char: 0, Time: 41ede808, Ver: 2/12, Num Names: 0, IDs: 1
+15f8       Entry: ID: 00000000, Value: 0x002378
+2378        Leaf: Addr: 0x219226, Size: 0x000134, Codepage: 1200
+018   Entry: ID: 0x000002, Value: 0x80000690
+690    Name Table: Char: 0, Time: 41ede808, Ver: 2/12, Num Names: 0, IDs: 9
+6a0     Entry: ID: 0x000064, Value: 0x80001930
+1930      Language Table: Char: 0, Time: 41ede808, Ver: 2/12, Num Names: 0, IDs: 1
+1940       Entry: ID: 00000000, Value: 0x0025a8
+25a8        Leaf: Addr: 0x21ba7a, Size: 0x001178, Codepage: 1200
+6a8     Entry: ID: 0x0000c8, Value: 0x80001960
+1960      Language Table: Char: 0, Time: 41ede808, Ver: 2/12, Num Names: 0, IDs: 1
+1970       Entry: ID: 00000000, Value: 0x0025c8
+25c8        Leaf: Addr: 0x21dc22, Size: 0x001030, Codepage: 1200
+ Resources start at offset: 0x103d6
+

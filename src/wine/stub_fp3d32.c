@@ -1,89 +1,386 @@
-/*
- * Stub FP3D32.DLL
- * Emulates the FlashPoint 3D Frame Grabber API to satisfy Jsm5000.exe
- */
-
+/* Generated Stub FP3D32.DLL */
 #include <windows.h>
 #include <stdio.h>
 #include <stdlib.h>
 
-// --- Global State ---
-// We allocate a fake framebuffer so the app doesn't crash if it tries to read/write directly.
-// 640x480 resolution * 4 bytes per pixel (RGBA) = 1,228,800 bytes
 #define FB_SIZE (640 * 480 * 4)
 static BYTE* g_FakeFramebuffer = NULL;
 
-// --- DllMain ---
 BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved) {
     if (fdwReason == DLL_PROCESS_ATTACH) {
-        // Allocate zeroed memory for the fake framebuffer
         g_FakeFramebuffer = (BYTE*)calloc(1, FB_SIZE);
-        
-        // Debug output
         fprintf(stderr, "[StubFP3D] DLL Loaded. Fake FB at %p\n", g_FakeFramebuffer);
     } else if (fdwReason == DLL_PROCESS_DETACH) {
-        if (g_FakeFramebuffer) {
-            free(g_FakeFramebuffer);
-            g_FakeFramebuffer = NULL;
-        }
+        if (g_FakeFramebuffer) free(g_FakeFramebuffer);
     }
     return TRUE;
 }
 
-// --- Exported Functions ---
-
-// 1. Board Detection
-__declspec(dllexport) long __stdcall FPV_Locate(void) {
-    fprintf(stderr, "[StubFP3D] FPV_Locate called -> Returning 1 (Found)\n");
-    return 1; 
+__declspec(dllexport) long __stdcall FPV_AutoWindow(void) {
+    return 1;
 }
 
-// 2. Initialization
-__declspec(dllexport) long __stdcall FPV_Init(long mode) {
-    fprintf(stderr, "[StubFP3D] FPV_Init(mode=%ld) called -> Success (1)\n", mode);
-    return 1; // CHANGED from 0 to 1. If 0 is Fail, this might fix initialization.
+__declspec(dllexport) long __stdcall FPV_AutoWindowInfo(long a0) {
+    return 1;
+}
+
+__declspec(dllexport) long __stdcall FPV_CheckSwitch(void) {
+    return 0;
 }
 
 __declspec(dllexport) long __stdcall FPV_Cleanup(void) {
     return 0;
 }
 
-// 3. Configuration / Version
-__declspec(dllexport) long __stdcall FPV_LoadConfig(char* filename) {
-    fprintf(stderr, "[StubFP3D] FPV_LoadConfig(%s)\n", filename ? filename : "NULL");
-    return 1; // CHANGED from 0 to 1, to test if VB boolean convention is preferred
-}
-
-__declspec(dllexport) long __stdcall FPV_SaveConfig(char* filename) {
-    return 1;
-}
-
-__declspec(dllexport) long __stdcall FPV_GetVersionInfo(void* ptr) {
-    // Populate struct? 
-    // Assuming simple return code for now.
-    return 1; 
-}
-
-// 4. Video Control
-__declspec(dllexport) long __stdcall FPV_SetVideoConfig(long a, long b) {
+__declspec(dllexport) long __stdcall FPV_ClearIRQ(void) {
     return 0;
 }
 
-__declspec(dllexport) long __stdcall FPV_VideoLive(long on) {
-    fprintf(stderr, "[StubFP3D] FPV_VideoLive(%ld)\n", on);
+__declspec(dllexport) long __stdcall FPV_ClosePrivateProfileString(void) {
+    return 0;
+}
+
+__declspec(dllexport) long __stdcall FPV_ConvertPixel(void) {
+    return 0;
+}
+
+__declspec(dllexport) long __stdcall FPV_ConvertRgbToYuv(void) {
+    return 0;
+}
+
+__declspec(dllexport) long __stdcall FPV_ConvertYuvToRgb(void) {
+    return 0;
+}
+
+__declspec(dllexport) long __stdcall FPV_CopyVGARect(void) {
+    return 0;
+}
+
+__declspec(dllexport) long __stdcall FPV_DumpViperRegs(void) {
+    return 0;
+}
+
+__declspec(dllexport) long __stdcall FPV_EnableIRQ(void) {
+    return 0;
+}
+
+__declspec(dllexport) long __stdcall FPV_EnableVideoMask(void) {
+    return 0;
+}
+
+__declspec(dllexport) long __stdcall FPV_FileResInfo(void) {
+    return 0;
+}
+
+__declspec(dllexport) long __stdcall FPV_GetCaptureBufferOffset(void) {
+    return 0;
+}
+
+__declspec(dllexport) long __stdcall FPV_GetFieldType(long a0) {
+    return 0;
+}
+
+__declspec(dllexport) long __stdcall FPV_GetFrameBufferPointer(void) {
+    return (long)g_FakeFramebuffer;
+}
+
+__declspec(dllexport) long __stdcall FPV_GetI2CReg(long a0) {
+    return 0;
+}
+
+__declspec(dllexport) long __stdcall FPV_GetIMAReg(long a0) {
+    return 0;
+}
+
+__declspec(dllexport) long __stdcall FPV_GetIRQNumber(long a0) {
+    return 0;
+}
+
+__declspec(dllexport) long __stdcall FPV_GetKeyMode(long a0) {
+    return 0;
+}
+
+__declspec(dllexport) long __stdcall FPV_GetKeyValue(long a0) {
+    return 0;
+}
+
+__declspec(dllexport) long __stdcall FPV_GetLibBuild(long a0) {
+    return 0;
+}
+
+__declspec(dllexport) long __stdcall FPV_GetLiveStatus(void) {
+    return 0;
+}
+
+__declspec(dllexport) long __stdcall FPV_GetMiscParm(long a0) {
+    return 0;
+}
+
+__declspec(dllexport) long __stdcall FPV_GetMiscReg(long a0) {
+    return 0;
+}
+
+__declspec(dllexport) long __stdcall FPV_GetOverlayRect(long a0) {
+    return 0;
+}
+
+__declspec(dllexport) long __stdcall FPV_GetPrivateProfileString(long a0) {
+    return 0;
+}
+
+__declspec(dllexport) long __stdcall FPV_GetSerialReg(long a0) {
+    return 0;
+}
+
+__declspec(dllexport) long __stdcall FPV_GetSTVideoAdjustments(long a0) {
+    return 0;
+}
+
+__declspec(dllexport) long __stdcall FPV_GetVersionInfo(long a0) {
+    return 1;
+}
+
+__declspec(dllexport) long __stdcall FPV_GetVGAMode(void) {
+    return 0;
+}
+
+__declspec(dllexport) long __stdcall FPV_GetVideoAdjustments(long a0) {
+    return 0;
+}
+
+__declspec(dllexport) long __stdcall FPV_GetVideoRect(long a0) {
+    return 0;
+}
+
+__declspec(dllexport) long __stdcall FPV_GetVideoSource(long a0) {
+    return 0;
+}
+
+__declspec(dllexport) long __stdcall FPV_GetVideoStandard(long a0) {
+    return 0;
+}
+
+__declspec(dllexport) long __stdcall FPV_GetVideoType(long a0) {
+    return 0;
+}
+
+__declspec(dllexport) long __stdcall FPV_GetViperReg(long a0) {
+    return 0;
+}
+
+__declspec(dllexport) long __stdcall FPV_GetXDelay(long a0) {
+    return 0;
+}
+
+__declspec(dllexport) long __stdcall FPV_GetYDelay(long a0) {
+    return 0;
+}
+
+__declspec(dllexport) long __stdcall FPV_Init(long a0) {
+    return 1;
+}
+
+__declspec(dllexport) long __stdcall FPV_IsOverlayEnabled(void) {
+    return 1;
+}
+
+__declspec(dllexport) long __stdcall FPV_LoadConfig(long a0) {
+    return 1;
+}
+
+__declspec(dllexport) long __stdcall FPV_LoadFile(void) {
+    return 0;
+}
+
+__declspec(dllexport) long __stdcall FPV_Locate(void) {
+    return 1;
+}
+
+__declspec(dllexport) long __stdcall FPV_MaskDraw(void) {
+    return 0;
+}
+
+__declspec(dllexport) long __stdcall FPV_OpenPrivateProfileString(void) {
+    return 0;
+}
+
+__declspec(dllexport) long __stdcall FPV_OverlayEnable(long a0) {
+    return 0;
+}
+
+__declspec(dllexport) long __stdcall FPV_PackYuv(void) {
+    return 0;
+}
+
+__declspec(dllexport) long __stdcall FPV_ReadOverlayMemory(void) {
+    return 0;
+}
+
+__declspec(dllexport) long __stdcall FPV_ReadSerialBytes(void) {
+    return 0;
+}
+
+__declspec(dllexport) long __stdcall FPV_ReadVideoByte(void) {
+    return 0;
+}
+
+__declspec(dllexport) long __stdcall FPV_ReadVideoMemory(void) {
+    return 0;
+}
+
+__declspec(dllexport) long __stdcall FPV_SaveConfig(long a0) {
+    return 1;
+}
+
+__declspec(dllexport) long __stdcall FPV_SaveConfigToEEPROM(void) {
+    return 0;
+}
+
+__declspec(dllexport) long __stdcall FPV_SaveFile(void) {
+    return 0;
+}
+
+__declspec(dllexport) long __stdcall FPV_ScreenToDIB(void) {
+    return 0;
+}
+
+__declspec(dllexport) long __stdcall FPV_SendViperFS(void) {
+    return 0;
+}
+
+__declspec(dllexport) long __stdcall FPV_SetAcqRect(long a0, long a1) {
+    return 0;
+}
+
+__declspec(dllexport) long __stdcall FPV_SetColorSpace(long a0) {
+    return 0;
+}
+
+__declspec(dllexport) long __stdcall FPV_SetI2CReg(long a0, long a1) {
+    return 0;
+}
+
+__declspec(dllexport) long __stdcall FPV_SetIMAReg(long a0, long a1) {
+    return 0;
+}
+
+__declspec(dllexport) long __stdcall FPV_SetInputOffset(long a0, long a1) {
+    return 0;
+}
+
+__declspec(dllexport) long __stdcall FPV_SetInputWindow(long a0, long a1, long a2, long a3) {
+    return 0;
+}
+
+__declspec(dllexport) long __stdcall FPV_SetIrisLevel(long a0, long a1) {
+    return 0;
+}
+
+__declspec(dllexport) long __stdcall FPV_SetKeyMode(long a0, long a1) {
+    return 0;
+}
+
+__declspec(dllexport) long __stdcall FPV_SetKeyValue(long a0, long a1) {
+    return 0;
+}
+
+__declspec(dllexport) long __stdcall FPV_SetMaskDelay(long a0, long a1) {
+    return 0;
+}
+
+__declspec(dllexport) long __stdcall FPV_SetMiscParm(long a0, long a1) {
+    return 0;
+}
+
+__declspec(dllexport) long __stdcall FPV_SetMiscReg(long a0, long a1) {
+    return 0;
+}
+
+__declspec(dllexport) long __stdcall FPV_SetPalette(long a0, long a1) {
+    return 0;
+}
+
+__declspec(dllexport) long __stdcall FPV_SetRS170LUT(long a0, long a1) {
+    return 0;
+}
+
+__declspec(dllexport) long __stdcall FPV_SetSerialReg(long a0, long a1) {
+    return 0;
+}
+
+__declspec(dllexport) long __stdcall FPV_SetupSerial(long a0, long a1) {
+    return 0;
+}
+
+__declspec(dllexport) long __stdcall FPV_SetVGAMode(long a0) {
+    return 0;
+}
+
+__declspec(dllexport) long __stdcall FPV_SetVGAPixel(long a0, long a1) {
+    return 0;
+}
+
+__declspec(dllexport) long __stdcall FPV_SetVGARect(long a0, long a1) {
+    return 0;
+}
+
+__declspec(dllexport) long __stdcall FPV_SetVideoAdjustments(long a0) {
+    return 0;
+}
+
+__declspec(dllexport) long __stdcall FPV_SetVideoConfig(long a0, long a1) {
+    return 0;
+}
+
+__declspec(dllexport) long __stdcall FPV_SetVideoMask(long a0, long a1) {
+    return 0;
+}
+
+__declspec(dllexport) long __stdcall FPV_SetVideoWindow(long a0, long a1, long a2, long a3) {
+    return 0;
+}
+
+__declspec(dllexport) long __stdcall FPV_SetVidFreq(long a0, long a1) {
+    return 0;
+}
+
+__declspec(dllexport) long __stdcall FPV_SetViperReg(long a0, long a1) {
+    return 0;
+}
+
+__declspec(dllexport) long __stdcall FPV_SetW32ReadSeg(long a0, long a1) {
+    return 0;
+}
+
+__declspec(dllexport) long __stdcall FPV_SetXYDelay(long a0, long a1) {
+    return 0;
+}
+
+__declspec(dllexport) long __stdcall FPV_UnpackYuv(void) {
+    return 0;
+}
+
+__declspec(dllexport) long __stdcall FPV_VGARectToMask(void) {
     return 0;
 }
 
 __declspec(dllexport) long __stdcall FPV_VideoGrab(void) {
-    fprintf(stderr, "[StubFP3D] FPV_VideoGrab\n");
     return 0;
 }
 
-// 5. Synchronization (CRITICAL)
-// If we return immediately, the app will spin 100% CPU.
-__declspec(dllexport) long __stdcall FPV_WaitVSync(void) {
-    // Sleep ~16ms to simulate 60Hz Vertical Sync
-    Sleep(16); 
+__declspec(dllexport) long __stdcall FPV_VideoLive(long a0) {
+    return 0;
+}
+
+__declspec(dllexport) long __stdcall FPV_VideoOffscreen(void) {
+    return 0;
+}
+
+__declspec(dllexport) long __stdcall FPV_VideoOutput(void) {
+    return 0;
+}
+
+__declspec(dllexport) long __stdcall FPV_WaitFieldType(long a0) {
     return 0;
 }
 
@@ -91,33 +388,27 @@ __declspec(dllexport) long __stdcall FPV_WaitHSync(void) {
     return 0;
 }
 
-__declspec(dllexport) long __stdcall FPV_WaitFieldType(long field) {
-    Sleep(8); // Half frame
+__declspec(dllexport) long __stdcall FPV_WaitMS(void) {
     return 0;
 }
 
-// 6. Direct Memory Access (CRITICAL)
-// The app likely wants a pointer to the VRAM to draw overlays or read pixels.
-__declspec(dllexport) void* __stdcall FPV_GetFrameBufferPointer(void) {
-    // fprintf(stderr, "[StubFP3D] FPV_GetFrameBufferPointer -> %p\n", g_FakeFramebuffer);
-    return g_FakeFramebuffer;
+__declspec(dllexport) long __stdcall FPV_WaitVSync(void) {
+    Sleep(16); return 0;
 }
 
-__declspec(dllexport) long __stdcall FPV_GetCaptureBufferOffset(void) {
+__declspec(dllexport) long __stdcall FPV_WritePrivateProfileString(void) {
     return 0;
 }
 
-// 7. Stubs for other discovered functions to prevent "Entry Point Not Found" errors
-// We stub the most likely ones found in strings.
+__declspec(dllexport) long __stdcall FPV_WriteSerialBytes(void) {
+    return 0;
+}
 
-__declspec(dllexport) long __stdcall FPV_SetVGAMode(long mode) { return 0; }
-__declspec(dllexport) long __stdcall FPV_GetVGAMode(void) { return 0; }
-__declspec(dllexport) long __stdcall FPV_SetColorSpace(long space) { return 0; }
-__declspec(dllexport) long __stdcall FPV_SetVideoWindow(long a, long b, long c, long d) { return 0; }
-__declspec(dllexport) long __stdcall FPV_SetInputWindow(long a, long b, long c, long d) { return 0; }
-__declspec(dllexport) long __stdcall FPV_SetVideoAdjustments(void* ptr) { return 0; }
-__declspec(dllexport) long __stdcall FPV_GetVideoAdjustments(void* ptr) { return 0; }
-__declspec(dllexport) long __stdcall FPV_OverlayEnable(long enable) { return 0; }
-__declspec(dllexport) long __stdcall FPV_IsOverlayEnabled(void) { return 1; }
-__declspec(dllexport) long __stdcall FPV_GetOverlayRect(void* ptr) { return 0; }
+__declspec(dllexport) long __stdcall FPV_WriteVideoByte(void) {
+    return 0;
+}
+
+__declspec(dllexport) long __stdcall FPV_WriteVideoMemory(void) {
+    return 0;
+}
 

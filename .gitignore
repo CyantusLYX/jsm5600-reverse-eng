@@ -96,3 +96,4 @@ prompt.md
 *.exe
 uv.lock
 .venv
+opencode.json
