@@ -87,3 +87,7 @@ http-client.private.env.json
 .cache
 .cmake
 build
+
+# Extracted vendor/original program files
+extracted/
+prompt.md

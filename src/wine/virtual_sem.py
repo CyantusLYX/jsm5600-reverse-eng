@@ -3,6 +3,14 @@ import struct
 import threading
 import logging
 import time
+import json
+
+try:
+    import zmq
+
+    HAS_ZMQ = True
+except ImportError:
+    HAS_ZMQ = False
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - [SEM_EMU] - %(message)s")
@@ -15,6 +23,22 @@ class VirtualSEM:
         self.port = port
         self.running = False
         self.server_socket = None
+
+        # --- IPC (ZeroMQ) ---
+        self.zmq_pub = None
+        if HAS_ZMQ:
+            try:
+                self.zmq_ctx = zmq.Context()
+                self.zmq_pub = self.zmq_ctx.socket(zmq.PUB)
+                self.zmq_pub.bind("tcp://127.0.0.1:5556")
+                logger.info("IPC: ZeroMQ Publisher bound to tcp://127.0.0.1:5556")
+            except Exception as e:
+                logger.error(f"IPC: Failed to bind ZeroMQ: {e}")
+                self.zmq_pub = None
+        else:
+            logger.warning(
+                "IPC: ZeroMQ not installed. Video Shim integration will not work."
+            )
 
         # --- SEM Internal State ---
         self.state = {
@@ -93,6 +117,15 @@ class VirtualSEM:
             logger.error(f"Handler error: {e}")
         finally:
             conn.close()
+
+    def _publish_state(self, event_type, value):
+        """Publish state change to Video Shim via ZMQ"""
+        if self.zmq_pub:
+            try:
+                msg = json.dumps({"event": event_type, "value": value})
+                self.zmq_pub.send_string(msg)
+            except Exception as e:
+                logger.error(f"IPC: Publish failed: {e}")
 
     def process_scsi_command(self, cdb):
         """
@@ -232,9 +265,21 @@ class VirtualSEM:
                 if sub_cmd == 0x00:
                     self.state["accv"] = val
                     logger.info(f"CMD: SetAccv -> {val}")
+                    self._publish_state("ACCV", val)
                 elif sub_cmd == 0x14:  # Filament
                     self.state["filament"] = val
                     logger.info(f"CMD: SetFilament -> {val}")
+
+        # --- [0x03] Lens Control (Mag) ---
+        elif opcode == 0x03:
+            # SetMag: { "0": "0x03", "1": "0x01", "8": "0x10" }
+            if cdb[1] == 0x01 and len(cdb) > 8 and cdb[8] == 0x10:
+                # Mag value location guess: bytes 9-10
+                if len(cdb) >= 11:
+                    mag = struct.unpack("<H", cdb[9:11])[0]
+                    self.state["mag_index"] = mag
+                    logger.info(f"CMD: SetMag -> {mag}")
+                    self._publish_state("MAG", mag)
 
         # --- [0x00] Scan Control ---
         elif opcode == 0x00:
@@ -248,9 +293,11 @@ class VirtualSEM:
                 # Actually earlier analysis: "speed 0 -> 0x0000".
                 self.state["scan_speed"] = speed
                 logger.info(f"CMD: SetScanSpeed -> {speed}")
+                self._publish_state("SPEED", speed)
             elif cdb[4] == 0x09:  # Start/Stop
                 is_start = cdb[5]
                 logger.info(f"CMD: Scan {'Start' if is_start else 'Stop'}")
+                self._publish_state("SCAN_STATUS", 1 if is_start else 0)
 
         # --- [0x04] Video Request ---
         elif opcode == 0x04:

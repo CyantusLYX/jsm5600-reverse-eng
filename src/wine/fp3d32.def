@@ -1,0 +1,26 @@
+LIBRARY fp3d32.dll
+EXPORTS
+    FPV_Locate
+    FPV_Init
+    FPV_Cleanup
+    FPV_LoadConfig
+    FPV_SaveConfig
+    FPV_GetVersionInfo
+    FPV_SetVideoConfig
+    FPV_VideoLive
+    FPV_VideoGrab
+    FPV_WaitVSync
+    FPV_WaitHSync
+    FPV_WaitFieldType
+    FPV_GetFrameBufferPointer
+    FPV_GetCaptureBufferOffset
+    FPV_SetVGAMode
+    FPV_GetVGAMode
+    FPV_SetColorSpace
+    FPV_SetVideoWindow
+    FPV_SetInputWindow
+    FPV_SetVideoAdjustments
+    FPV_GetVideoAdjustments
+    FPV_OverlayEnable
+    FPV_IsOverlayEnabled
+    FPV_GetOverlayRect
