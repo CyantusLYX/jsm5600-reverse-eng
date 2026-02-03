@@ -91,3 +91,8 @@ build
 # Extracted vendor/original program files
 extracted/
 prompt.md
+*.log
+*.dll
+*.exe
+uv.lock
+.venv
