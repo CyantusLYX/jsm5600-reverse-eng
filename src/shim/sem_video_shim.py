@@ -3,7 +3,6 @@ import sys
 import zmq
 import cv2
 import numpy as np
-import threading
 import json
 from PyQt6.QtWidgets import QApplication, QMainWindow, QLabel, QVBoxLayout, QWidget
 from PyQt6.QtCore import QTimer, Qt
@@ -28,12 +27,14 @@ class SEMVideoShim(QMainWindow):
         self.layout.addWidget(self.video_label)
 
         # --- State ---
-        self.current_mag = 1000
-        self.current_accv = 15000
-        self.scan_speed = 1  # 1 = Fast, >1 = Slow
+        self.current_mag = None
+        self.current_accv = None
+        self.scan_speed = 0
         self.is_scanning = False
         self.micron_bar_width_px = 0
         self.micron_text = "10um"
+        self.last_display_frame = None
+        self.base_fov_um_at_1k = 120.0
 
         # --- IPC (ZeroMQ SUB) ---
         self.zmq_ctx = zmq.Context()
@@ -48,13 +49,15 @@ class SEMVideoShim(QMainWindow):
         # --- Video Capture ---
         # Open /dev/video0.
         # Note: We prefer YUYV or MJPEG.
-        self.cap = cv2.VideoCapture(0)
+        self.cap = cv2.VideoCapture(0, cv2.CAP_V4L2)
         if not self.cap.isOpened():
             self.video_label.setText("Error: No Camera (/dev/video0)")
 
         # Try to set resolution (standard NTSC/PAL is 720x480 or 640x480)
         self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
         self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+        self.cap.set(cv2.CAP_PROP_CONVERT_RGB, 0)
+        self.cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"YUYV"))
 
         # Buffer for integration (Slow Scan)
         self.accum_buffer = None
@@ -88,8 +91,9 @@ class SEMVideoShim(QMainWindow):
                     self.current_accv = value
                     print(f"[Shim] Accv changed: {value / 1000} kV")
                 elif event == "SPEED":
-                    self.scan_speed = value
-                    print(f"[Shim] Speed changed: {value}")
+                    if value is not None:
+                        self.scan_speed = value
+                        print(f"[Shim] Speed changed: {value}")
                 elif event == "SCAN_STATUS":
                     self.is_scanning = bool(value)
                     print(f"[Shim] Scan: {self.is_scanning}")
@@ -108,17 +112,25 @@ class SEMVideoShim(QMainWindow):
             return
 
         # --- 1. Grayscale Conversion (Luma Extraction) ---
-        # MS210x sends YUYV usually. OpenCV converts to BGR by default on read()
-        # if CAP_PROP_CONVERT_RGB is true (default).
-        # So 'frame' is BGR.
-        # Convert to Grayscale to simulate SEM signal and remove chroma noise.
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        # Try to interpret raw YUYV when available; fallback to BGR->GRAY.
+        if frame is None:
+            return
+
+        gray = None
+        if len(frame.shape) == 2:
+            gray = frame
+        elif len(frame.shape) == 3 and frame.shape[2] == 2:
+            gray = cv2.cvtColor(frame, cv2.COLOR_YUV2GRAY_YUY2)
+        elif len(frame.shape) == 3 and frame.shape[2] == 3:
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        else:
+            return
 
         # --- 2. Image Processing (Integration) ---
         display_frame = gray
+        is_slow = self.scan_speed >= 2
 
-        if self.scan_speed > 1:  # Slow scan logic
-            # Simple simulated integration for now
+        if is_slow and self.is_scanning:
             if self.accum_buffer is None or self.accum_buffer.shape != gray.shape:
                 self.accum_buffer = gray.astype(np.float32)
             else:
@@ -126,7 +138,12 @@ class SEMVideoShim(QMainWindow):
 
             display_frame = cv2.convertScaleAbs(self.accum_buffer)
         else:
-            self.accum_buffer = None  # Reset on fast scan
+            if not is_slow:
+                self.accum_buffer = None
+            elif not self.is_scanning and self.last_display_frame is not None:
+                display_frame = self.last_display_frame
+
+        self.last_display_frame = display_frame
 
         # --- 3. Convert to QImage ---
         h, w = display_frame.shape
@@ -151,11 +168,14 @@ class SEMVideoShim(QMainWindow):
         painter.setPen(QColor(255, 255, 0))  # Yellow
 
         # 1. Info Text
-        info_text = f"MAG: x{self.current_mag}  {self.current_accv / 1000:.1f}kV"
-        if self.scan_speed > 1:
-            info_text += " (SLOW)"
-        else:
-            info_text += " (TV)"
+        mag_str = f"x{self.current_mag}" if self.current_mag is not None else "---"
+        kv_str = (
+            f"{self.current_accv / 1000:.1f}kV"
+            if self.current_accv is not None
+            else "-.-kV"
+        )
+        mode_str = "SLOW" if self.scan_speed >= 2 else "TV"
+        info_text = f"MAG: {mag_str}  {kv_str} ({mode_str})"
 
         painter.drawText(10, 30, info_text)
 
@@ -165,8 +185,8 @@ class SEMVideoShim(QMainWindow):
         # Let's assume at x1000, FOV is 120um (Typical for JEOL 5600?)
         # Base Constant K = 1000 * 120 = 120,000
 
-        if self.current_mag > 0:
-            fov_width_um = 120000.0 / self.current_mag
+        if self.current_mag and self.current_mag > 0:
+            fov_width_um = (self.base_fov_um_at_1k * 1000.0) / self.current_mag
             um_per_pixel = fov_width_um / w
 
             # Find a nice round number for the bar (e.g. 10um, 50um, 100um)

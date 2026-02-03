@@ -389,6 +389,24 @@ class BridgeSEM:
                         cdb, direction=dir_byte, data_out=data_out, xfer_len=xfer_len
                     )
 
+                # --- 3.5 Intercept / Patch Responses (Read Synch) ---
+                # Sniff responses to "Get" commands to sync the shim
+                if status == 1 and len(resp_data) >= 2:
+                    opcode = cdb[0]
+                    # GetMag (0xC8 50)
+                    if opcode == 0xC8 and cdb[1] == 0x50:
+                        val = struct.unpack("<H", resp_data[:2])[0]
+                        self._publish_state("MAG", val)
+
+                    # GetAccv (0xC6 11)
+                    elif opcode == 0xC6 and cdb[1] == 0x11:
+                        val = struct.unpack("<H", resp_data[:2])[0]
+                        self._publish_state("ACCV", val)
+
+                    # GetAccv2 (0x02 01 ... 08 ... 00)
+                    # This is tricky as it's a SET command but sometimes apps read back?
+                    # No, usually apps read via C6/C8.
+
                 # For RES, we can pass resp_data to decoder for FA_Response logic
                 cmd_name_res, cmd_level_res = self.decoder.decode(
                     cdb, data_bytes=resp_data, direction="RES"
