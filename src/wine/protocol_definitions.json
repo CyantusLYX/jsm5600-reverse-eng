@@ -263,6 +263,7 @@
         },
         "0xFA": {
             "name": "VendorGeneric10",
+            "notes": "Wrapper CDB. Inner command is carried in Data-Out payload; bridge_sem.py decodes payload for SetMag/SetSpeed/SetAccv/Scan status updates.",
             "matches": [
                 { "name": "Generic10_Wrapper", "level": "LOG", "match": { "0": "0xFA" } }
             ]

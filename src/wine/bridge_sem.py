@@ -267,6 +267,39 @@ class BridgeSEM:
             except Exception as e:
                 logger.error(f"IPC: Publish failed: {e}")
 
+    def _extract_word(self, data):
+        if not data or len(data) < 2:
+            return None
+        val = struct.unpack("<H", data[:2])[0]
+        if val != 0:
+            return val
+        if len(data) >= 4:
+            val = struct.unpack("<H", data[2:4])[0]
+            if val != 0:
+                return val
+            val = struct.unpack(">H", data[:2])[0]
+            if val != 0:
+                return val
+        return None
+
+    def _publish_from_cdb(self, cdb):
+        if not cdb:
+            return
+        opcode = cdb[0]
+        if opcode == 0x02 and cdb[1] == 0x01 and cdb[4] == 0x08 and cdb[8] == 0x00:
+            val = struct.unpack("<H", cdb[9:11])[0]
+            self._publish_state("ACCV", val)
+        elif opcode == 0x00 and cdb[1] == 0x01 and cdb[4] == 0x00:
+            val = struct.unpack(">H", cdb[6:8])[0]
+            self._publish_state("SPEED", val)
+        elif opcode == 0x00 and cdb[4] == 0x09:
+            is_start = cdb[5]
+            self._publish_state("SCAN_STATUS", 1 if is_start else 0)
+        elif opcode == 0x03 and cdb[1] == 0x01 and cdb[8] == 0x10:
+            if len(cdb) >= 11:
+                val = struct.unpack("<H", cdb[9:11])[0]
+                self._publish_state("MAG", val)
+
     def start(self):
         try:
             self.dev_fd = os.open(self.device_path, os.O_RDWR)
@@ -344,31 +377,14 @@ class BridgeSEM:
                 detail = "Intercepted"
 
                 opcode = cdb[0]
+                inner_cdb = None
+                if opcode == 0xFA and data_out:
+                    inner_cdb = data_out
+                    self._publish_from_cdb(inner_cdb)
 
                 # Intercept Set Commands (Publish to ZMQ)
-                if (
-                    opcode == 0x02
-                    and cdb[1] == 0x01
-                    and cdb[4] == 0x08
-                    and cdb[8] == 0x00
-                ):  # SetAccv
-                    val = struct.unpack("<H", cdb[9:11])[0]
-                    self._publish_state("ACCV", val)
-
-                elif opcode == 0x00 and cdb[1] == 0x01 and cdb[4] == 0x00:  # SetSpeed
-                    val = struct.unpack(">H", cdb[6:8])[
-                        0
-                    ]  # Big Endian usually for this group
-                    self._publish_state("SPEED", val)
-
-                elif opcode == 0x00 and cdb[4] == 0x09:  # Start/Stop Scan
-                    is_start = cdb[5]
-                    self._publish_state("SCAN_STATUS", 1 if is_start else 0)
-
-                elif opcode == 0x03 and cdb[1] == 0x01 and cdb[8] == 0x10:  # SetMag
-                    if len(cdb) >= 11:
-                        val = struct.unpack("<H", cdb[9:11])[0]
-                        self._publish_state("MAG", val)
+                if opcode != 0xFA:
+                    self._publish_from_cdb(cdb)
 
                 # Intercept Problematic Get Commands
                 if opcode == 0xC4 and cdb[1] == 0x03:  # GetALS
@@ -393,15 +409,24 @@ class BridgeSEM:
                 # Sniff responses to "Get" commands to sync the shim
                 if status == 1 and len(resp_data) >= 2:
                     opcode = cdb[0]
-                    # GetMag (0xC8 50)
                     if opcode == 0xC8 and cdb[1] == 0x50:
-                        val = struct.unpack("<H", resp_data[:2])[0]
-                        self._publish_state("MAG", val)
-
-                    # GetAccv (0xC6 11)
+                        val = self._extract_word(resp_data)
+                        if val is not None:
+                            self._publish_state("MAG", val)
                     elif opcode == 0xC6 and cdb[1] == 0x11:
-                        val = struct.unpack("<H", resp_data[:2])[0]
-                        self._publish_state("ACCV", val)
+                        val = self._extract_word(resp_data)
+                        if val is not None and val > 1000:
+                            self._publish_state("ACCV", val)
+                    elif inner_cdb and len(inner_cdb) >= 2:
+                        inner_opcode = inner_cdb[0]
+                        if inner_opcode == 0xC8 and inner_cdb[1] == 0x50:
+                            val = self._extract_word(resp_data)
+                            if val is not None:
+                                self._publish_state("MAG", val)
+                        elif inner_opcode == 0xC6 and inner_cdb[1] == 0x11:
+                            val = self._extract_word(resp_data)
+                            if val is not None and val > 1000:
+                                self._publish_state("ACCV", val)
 
                     # GetAccv2 (0x02 01 ... 08 ... 00)
                     # This is tricky as it's a SET command but sometimes apps read back?

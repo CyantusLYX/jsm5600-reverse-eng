@@ -246,6 +246,9 @@
 - **Opcode**: `0xFA`
 - **結構**: `[FA 00 00 00 00 00 00 00 len_high len_low]`
 - 常用於發送 Mode 1 指令的 10 字節 CDB 封裝。
+- **Payload 解析 (Bridge/Video Shim)**:
+  - Data-Out payload 內含實際的 Inner CDB (通常從第 0 byte 起即為 opcode)。
+  - 目前在 `bridge_sem.py` 會針對內層的 **SetMag / SetSpeed / SetAccv / Scan Start/Stop** 做即時狀態同步。
 
 ---
 
