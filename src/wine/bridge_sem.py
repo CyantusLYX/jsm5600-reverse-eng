@@ -10,6 +10,13 @@ import json
 import time
 from datetime import datetime
 
+try:
+    import zmq
+
+    HAS_ZMQ = True
+except ImportError:
+    HAS_ZMQ = False
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - [SEM_BRIDGE] - %(message)s"
@@ -240,6 +247,26 @@ class BridgeSEM:
         self.dev_fd = -1
         self.decoder = ProtocolDecoder()
 
+        # --- IPC (ZeroMQ) ---
+        self.zmq_pub = None
+        if HAS_ZMQ:
+            try:
+                self.zmq_ctx = zmq.Context()
+                self.zmq_pub = self.zmq_ctx.socket(zmq.PUB)
+                self.zmq_pub.bind("tcp://127.0.0.1:5556")
+                logger.info("IPC: ZeroMQ Publisher bound to tcp://127.0.0.1:5556")
+            except Exception as e:
+                logger.error(f"IPC: Failed to bind ZeroMQ: {e}")
+                self.zmq_pub = None
+
+    def _publish_state(self, event_type, value):
+        if self.zmq_pub:
+            try:
+                msg = json.dumps({"event": event_type, "value": value})
+                self.zmq_pub.send_string(msg)
+            except Exception as e:
+                logger.error(f"IPC: Publish failed: {e}")
+
     def start(self):
         try:
             self.dev_fd = os.open(self.device_path, os.O_RDWR)
@@ -308,10 +335,59 @@ class BridgeSEM:
                     cdb, None, "CMD", 0, cmd_name, defined_level=cmd_level
                 )
 
-                # 3. Execute on Real Device
-                resp_data, status, detail = self.send_scsi_cmd(
-                    cdb, direction=dir_byte, data_out=data_out, xfer_len=xfer_len
-                )
+                # --- 2.5 Intercept / Patch Logic ---
+                # Some commands fail on the target or need to be faked for the Shim to work.
+
+                intercepted = False
+                resp_data = b""
+                status = 1  # Success
+                detail = "Intercepted"
+
+                opcode = cdb[0]
+
+                # Intercept Set Commands (Publish to ZMQ)
+                if (
+                    opcode == 0x02
+                    and cdb[1] == 0x01
+                    and cdb[4] == 0x08
+                    and cdb[8] == 0x00
+                ):  # SetAccv
+                    val = struct.unpack("<H", cdb[9:11])[0]
+                    self._publish_state("ACCV", val)
+
+                elif opcode == 0x00 and cdb[1] == 0x01 and cdb[4] == 0x00:  # SetSpeed
+                    val = struct.unpack(">H", cdb[6:8])[
+                        0
+                    ]  # Big Endian usually for this group
+                    self._publish_state("SPEED", val)
+
+                elif opcode == 0x00 and cdb[4] == 0x09:  # Start/Stop Scan
+                    is_start = cdb[5]
+                    self._publish_state("SCAN_STATUS", 1 if is_start else 0)
+
+                elif opcode == 0x03 and cdb[1] == 0x01 and cdb[8] == 0x10:  # SetMag
+                    if len(cdb) >= 11:
+                        val = struct.unpack("<H", cdb[9:11])[0]
+                        self._publish_state("MAG", val)
+
+                # Intercept Problematic Get Commands
+                if opcode == 0xC4 and cdb[1] == 0x03:  # GetALS
+                    intercepted = True
+                    resp_data = b"\x00\x00\x00\x00"  # 4 bytes
+
+                elif opcode == 0xCE:  # Extended Status (PCD, ESITF, BCX)
+                    intercepted = True
+                    resp_data = b"\x00\x00\x00\x00"  # 4 bytes
+
+                elif opcode == 0xC7 and cdb[1] == 0x00:  # GetLbgStatus
+                    intercepted = True
+                    resp_data = bytes(18)  # 18 bytes of zeros
+
+                # --- 3. Execute ---
+                if not intercepted:
+                    resp_data, status, detail = self.send_scsi_cmd(
+                        cdb, direction=dir_byte, data_out=data_out, xfer_len=xfer_len
+                    )
 
                 # For RES, we can pass resp_data to decoder for FA_Response logic
                 cmd_name_res, cmd_level_res = self.decoder.decode(
