@@ -193,20 +193,21 @@ class VirtualSEM:
             if cdb[1] == 0x81:  # Get Hardware ID
                 # Return 2 bytes (Hardware ID) + 2 bytes padding?
                 # Protocol says [CC 81 00 04] -> reads 4 bytes.
-                # Usually returns 2 bytes swapped? Let's return 4 bytes to be safe.
-                # ID 0x170C
                 response = struct.pack("<Hxx", self.state["hardware_id"])
                 logger.info(f"CMD: GetHardwareID -> {self.state['hardware_id']:04X}")
 
         # --- [0xC4] Vacuum Status ---
         elif opcode == 0xC4:
             if cdb[1] == 0x01:  # Get Vacuum Status
-                # Return 2 bytes status
                 response = struct.pack("<Hxx", self.state["vacuum_status"])
                 logger.info(f"CMD: GetVacuumStatus -> {self.state['vacuum_status']}")
             elif cdb[1] == 0x00:  # Get Vacuum Mode
                 response = struct.pack("<Hxx", self.state["vacuum_mode"])
                 logger.info(f"CMD: GetVacuumMode -> {self.state['vacuum_mode']}")
+            elif cdb[1] == 0x03:  # Get ALS
+                # Allocation len 4
+                response = b"\x00\x00\x00\x00"
+                logger.info("CMD: GetALS -> 0")
 
         # --- [0xC6] Gun Status ---
         elif opcode == 0xC6:
@@ -219,6 +220,27 @@ class VirtualSEM:
             elif cdb[1] == 0x12:  # Get Filament
                 response = struct.pack("<Hxx", self.state["filament"])
                 logger.info("CMD: GetFilament")
+
+        # --- [0xC7] Gun Detail (LaB6) ---
+        elif opcode == 0xC7:
+            if cdb[1] == 0x00:  # Get Lbg Status
+                # CDB says len 0x12 (18)
+                # Return 18 bytes of zeros (Status OK/Off)
+                response = bytes(18)
+                logger.info("CMD: GetLbgStatus (18b)")
+
+        # --- [0xCE] Extended Status ---
+        elif opcode == 0xCE:
+            # Most seem to ask for 4 bytes based on log
+            response = b"\x00\x00\x00\x00"
+            name = "UnknownExt"
+            if cdb[1] == 0x02:
+                name = "GetEsitfStatus"
+            elif cdb[1] == 0x08:
+                name = "GetPcdStatus"
+            elif cdb[1] == 0x0B:
+                name = "GetBcxStatus"
+            logger.info(f"CMD: {name} -> 0")
 
         # --- [0xC5] Pressure ---
         elif opcode == 0xC5:
@@ -312,9 +334,24 @@ class VirtualSEM:
         # --- Default Fallback ---
         else:
             # If it's a read command (checking group C* usually), return dummy zeros
-            if (opcode & 0xF0) == 0xC0:
-                response = b"\x00\x00\x00\x00"
-                logger.debug(f"CMD: Unknown Read {hex_cdb} -> 0000")
+            if (
+                (opcode & 0xF0) == 0xC0
+                or (opcode & 0xF0) == 0xD0
+                or (opcode & 0xF0) == 0xE0
+            ):
+                # Try to determine length from CDB[4]
+                alloc_len = 4
+                if len(cdb) > 4:
+                    alloc_len = cdb[4]
+
+                # Safety clamp
+                if alloc_len > 256:
+                    alloc_len = 4
+                if alloc_len == 0:
+                    alloc_len = 4
+
+                response = bytes(alloc_len)
+                logger.debug(f"CMD: Unknown Read {hex_cdb} -> {alloc_len} bytes")
             else:
                 logger.debug(f"CMD: Unknown Write {hex_cdb}")
 

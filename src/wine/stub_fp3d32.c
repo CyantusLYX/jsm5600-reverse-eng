@@ -40,8 +40,8 @@ __declspec(dllexport) long __stdcall FPV_Locate(void) {
 
 // 2. Initialization
 __declspec(dllexport) long __stdcall FPV_Init(long mode) {
-    fprintf(stderr, "[StubFP3D] FPV_Init(mode=%ld) called -> Success\n", mode);
-    return 0; // 0 Usually means success in this API (based on typical old C libs)
+    fprintf(stderr, "[StubFP3D] FPV_Init(mode=%ld) called -> Success (1)\n", mode);
+    return 1; // CHANGED from 0 to 1. If 0 is Fail, this might fix initialization.
 }
 
 __declspec(dllexport) long __stdcall FPV_Cleanup(void) {
@@ -51,17 +51,17 @@ __declspec(dllexport) long __stdcall FPV_Cleanup(void) {
 // 3. Configuration / Version
 __declspec(dllexport) long __stdcall FPV_LoadConfig(char* filename) {
     fprintf(stderr, "[StubFP3D] FPV_LoadConfig(%s)\n", filename ? filename : "NULL");
-    return 0;
+    return 1; // CHANGED from 0 to 1, to test if VB boolean convention is preferred
 }
 
 __declspec(dllexport) long __stdcall FPV_SaveConfig(char* filename) {
-    return 0;
+    return 1;
 }
 
 __declspec(dllexport) long __stdcall FPV_GetVersionInfo(void* ptr) {
-    // We might need to populate the struct at 'ptr' if the app crashes.
-    // For now, assume it just wants a return code.
-    return 0;
+    // Populate struct? 
+    // Assuming simple return code for now.
+    return 1; 
 }
 
 // 4. Video Control
