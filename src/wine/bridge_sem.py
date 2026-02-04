@@ -337,25 +337,31 @@ class BridgeSEM:
         ):
             val = struct.unpack("<H", cdb[9:11])[0]
             self._publish_state("ACCV", val)
-        elif opcode == 0x02 and cdb[1] == 0x01 and cdb[4] == 0x08 and cdb[8] == 0x00:
+        elif (
+            opcode == 0x02
+            and len(cdb) > 8
+            and cdb[1] == 0x01
+            and cdb[4] == 0x08
+            and cdb[8] == 0x00
+        ):
             logger.warning(f"SetAccv CDB too short: len={len(cdb)}")
 
         elif opcode == 0x00 and len(cdb) > 7 and cdb[1] == 0x01 and cdb[4] == 0x00:
             val = struct.unpack(">H", cdb[6:8])[0]
             self._publish_state("SPEED", val)
-        elif opcode == 0x00 and cdb[1] == 0x01 and cdb[4] == 0x00:
+        elif opcode == 0x00 and len(cdb) > 4 and cdb[1] == 0x01 and cdb[4] == 0x00:
             logger.warning(f"SetSpeed CDB too short: len={len(cdb)}")
 
         elif opcode == 0x00 and len(cdb) > 5 and cdb[4] == 0x09:
             is_start = cdb[5]
             self._publish_state("SCAN_STATUS", 1 if is_start else 0)
-        elif opcode == 0x00 and cdb[4] == 0x09:
+        elif opcode == 0x00 and len(cdb) > 4 and cdb[4] == 0x09:
             logger.warning(f"ScanStatus CDB too short: len={len(cdb)}")
 
         elif opcode == 0x03 and len(cdb) > 9 and cdb[1] == 0x01 and cdb[8] == 0x10:
             val = struct.unpack("<H", cdb[9:11])[0]
             self._publish_state("MAG", val)
-        elif opcode == 0x03 and cdb[1] == 0x01 and cdb[8] == 0x10:
+        elif opcode == 0x03 and len(cdb) > 8 and cdb[1] == 0x01 and cdb[8] == 0x10:
             logger.warning(f"SetMag CDB too short: len={len(cdb)}")
 
     def start(self):
