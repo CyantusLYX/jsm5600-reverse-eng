@@ -247,6 +247,8 @@ class BridgeSEM:
         self.dev_fd = -1
         self.decoder = ProtocolDecoder()
         self.last_status_block = None
+        self.last_ht_mode = None
+        self.last_ht_state = None
 
         # --- IPC (ZeroMQ) ---
         self.zmq_pub = None
@@ -278,17 +280,33 @@ class BridgeSEM:
 
     def _log_status_diff(self, data):
         if not data:
-            return
+            return ""
         if self.last_status_block is None:
             self.last_status_block = bytes(data)
-            return
+            snapshot = self._format_bytes(
+                data, limit=128
+            )  # Show full 128 bytes on init
+            return f"StatusBlock init: {snapshot}"
         diffs = []
         for idx, (old, new) in enumerate(zip(self.last_status_block, data)):
             if old != new:
                 diffs.append(f"[{idx}] {old:02X}->{new:02X}")
-        if diffs:
-            logger.info(f"StatusBlock diff: {' '.join(diffs[:12])}")
         self.last_status_block = bytes(data)
+        if diffs:
+            return f"StatusBlock diff: {' '.join(diffs)}"  # Show ALL diffs
+        return ""
+
+    def _publish_status_block(self, data):
+        if not data or len(data) < 7:
+            return
+        ht_mode = data[4]
+        ht_state = data[6]
+        if ht_mode != self.last_ht_mode:
+            self.last_ht_mode = ht_mode
+            self._publish_state("HT_MODE", ht_mode)
+        if ht_state != self.last_ht_state:
+            self.last_ht_state = ht_state
+            self._publish_state("HT_STATE", ht_state)
 
     def _extract_word(self, data):
         if not data or len(data) < 2:
@@ -307,6 +325,7 @@ class BridgeSEM:
 
     def _publish_from_cdb(self, cdb):
         if not cdb or len(cdb) < 2:
+            logger.warning(f"Short CDB ignored in _publish_from_cdb: {cdb}")
             return
         opcode = cdb[0]
         if (
@@ -318,15 +337,26 @@ class BridgeSEM:
         ):
             val = struct.unpack("<H", cdb[9:11])[0]
             self._publish_state("ACCV", val)
+        elif opcode == 0x02 and cdb[1] == 0x01 and cdb[4] == 0x08 and cdb[8] == 0x00:
+            logger.warning(f"SetAccv CDB too short: len={len(cdb)}")
+
         elif opcode == 0x00 and len(cdb) > 7 and cdb[1] == 0x01 and cdb[4] == 0x00:
             val = struct.unpack(">H", cdb[6:8])[0]
             self._publish_state("SPEED", val)
+        elif opcode == 0x00 and cdb[1] == 0x01 and cdb[4] == 0x00:
+            logger.warning(f"SetSpeed CDB too short: len={len(cdb)}")
+
         elif opcode == 0x00 and len(cdb) > 5 and cdb[4] == 0x09:
             is_start = cdb[5]
             self._publish_state("SCAN_STATUS", 1 if is_start else 0)
+        elif opcode == 0x00 and cdb[4] == 0x09:
+            logger.warning(f"ScanStatus CDB too short: len={len(cdb)}")
+
         elif opcode == 0x03 and len(cdb) > 9 and cdb[1] == 0x01 and cdb[8] == 0x10:
             val = struct.unpack("<H", cdb[9:11])[0]
             self._publish_state("MAG", val)
+        elif opcode == 0x03 and cdb[1] == 0x01 and cdb[8] == 0x10:
+            logger.warning(f"SetMag CDB too short: len={len(cdb)}")
 
     def start(self):
         try:
@@ -385,6 +415,9 @@ class BridgeSEM:
                 if cdb[0] == 0xD0 and dir_byte == 1 and len(cdb) > 4:
                     alloc_len = cdb[4]
                     if alloc_len and xfer_len < alloc_len:
+                        logger.warning(
+                            f"Length mismatch for D0 cmd: alloc_len={alloc_len}, xfer_len={xfer_len}. Adjusting."
+                        )
                         xfer_len = alloc_len
 
                 data_out = None
@@ -430,18 +463,22 @@ class BridgeSEM:
                 if opcode != 0xFA:
                     self._publish_from_cdb(cdb)
 
-                # Intercept Problematic Get Commands
-                if opcode == 0xC4 and cdb[1] == 0x03:  # GetALS
-                    intercepted = True
-                    resp_data = b"\x00\x00\x00\x00"  # 4 bytes
+                # --- REMOVED FORCED INTERCEPTION ---
+                # User requested no faking. We rely on the real hardware.
+                # If the app freezes, it means the real hardware response is invalid/unexpected.
+                # We have fixed the xfer_len handling in Step 1, so short reads should be handled by the driver/bridge correctly now.
 
-                elif opcode == 0xCE:  # Extended Status (PCD, ESITF, BCX)
-                    intercepted = True
-                    resp_data = b"\x00\x00\x00\x00"  # 4 bytes
+                # if opcode == 0xC4 and cdb[1] == 0x03:  # GetALS
+                #     intercepted = True
+                #     resp_data = b"\x00\x00\x00\x00"  # 4 bytes
 
-                elif opcode == 0xC7 and cdb[1] == 0x00:  # GetLbgStatus
-                    intercepted = True
-                    resp_data = bytes(18)  # 18 bytes of zeros
+                # elif opcode == 0xCE:  # Extended Status (PCD, ESITF, BCX)
+                #     intercepted = True
+                #     resp_data = b"\x00\x00\x00\x00"  # 4 bytes
+
+                # elif opcode == 0xC7 and cdb[1] == 0x00:  # GetLbgStatus
+                #     intercepted = True
+                #     resp_data = bytes(18)  # 18 bytes of zeros
 
                 # --- 3. Execute ---
                 if not intercepted:
@@ -451,6 +488,7 @@ class BridgeSEM:
 
                 # --- 3.5 Intercept / Patch Responses (Read Synch) ---
                 # Sniff responses to "Get" commands to sync the shim
+                status_diff = ""
                 if status == 1 and len(resp_data) >= 2:
                     opcode = cdb[0]
                     if opcode == 0xC8 and cdb[1] == 0x50:
@@ -466,7 +504,8 @@ class BridgeSEM:
                         if val is not None:
                             self._publish_state("HT_STATUS", val)
                     elif opcode == 0xD0:
-                        self._log_status_diff(resp_data)
+                        status_diff = self._log_status_diff(resp_data)
+                        self._publish_status_block(resp_data)
                     elif inner_cdb and len(inner_cdb) >= 2:
                         inner_opcode = inner_cdb[0]
                         if inner_opcode == 0xC8 and inner_cdb[1] == 0x50:
@@ -488,6 +527,9 @@ class BridgeSEM:
                 )
 
                 # Log Response
+                res_extra = detail
+                if status_diff:
+                    res_extra = f"{detail} {status_diff}".strip()
                 session_logger.log_transaction(
                     cdb,
                     resp_data,
@@ -495,7 +537,7 @@ class BridgeSEM:
                     status,
                     cmd_name_res,
                     defined_level=cmd_level_res,
-                    extra_info=detail,
+                    extra_info=res_extra,
                 )
 
                 # 4. Send Response

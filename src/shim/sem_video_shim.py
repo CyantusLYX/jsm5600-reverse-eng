@@ -97,6 +97,12 @@ class SEMVideoShim(QMainWindow):
                 elif event == "SCAN_STATUS":
                     self.is_scanning = bool(value)
                     print(f"[Shim] Scan: {self.is_scanning}")
+                elif event == "HT_MODE":
+                    self.ht_mode = value
+                    print(f"[Shim] HT Mode: {value}")
+                elif event == "HT_STATE":
+                    self.ht_state = value
+                    print(f"[Shim] HT State: {value}")
 
         except zmq.Again:
             pass
@@ -175,7 +181,15 @@ class SEMVideoShim(QMainWindow):
             else "-.-kV"
         )
         mode_str = "SLOW" if self.scan_speed >= 2 else "TV"
-        info_text = f"MAG: {mag_str}  {kv_str} ({mode_str})"
+
+        # HT Status (Mapped from byte 6)
+        ht_str = "HT: WAIT"
+        if self.ht_state == 5:
+            ht_str = "HT: ON"
+        elif self.ht_state == 3:
+            ht_str = "HT: READY"
+
+        info_text = f"MAG: {mag_str}  {kv_str} ({mode_str})  {ht_str}"
 
         painter.drawText(10, 30, info_text)
 
