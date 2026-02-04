@@ -246,6 +246,7 @@ class BridgeSEM:
         self.addr = None
         self.dev_fd = -1
         self.decoder = ProtocolDecoder()
+        self.last_status_block = None
 
         # --- IPC (ZeroMQ) ---
         self.zmq_pub = None
@@ -267,6 +268,28 @@ class BridgeSEM:
             except Exception as e:
                 logger.error(f"IPC: Publish failed: {e}")
 
+    def _format_bytes(self, data, limit=16):
+        if not data:
+            return ""
+        snippet = " ".join(f"{b:02X}" for b in data[:limit])
+        if len(data) > limit:
+            snippet += " ..."
+        return snippet
+
+    def _log_status_diff(self, data):
+        if not data:
+            return
+        if self.last_status_block is None:
+            self.last_status_block = bytes(data)
+            return
+        diffs = []
+        for idx, (old, new) in enumerate(zip(self.last_status_block, data)):
+            if old != new:
+                diffs.append(f"[{idx}] {old:02X}->{new:02X}")
+        if diffs:
+            logger.info(f"StatusBlock diff: {' '.join(diffs[:12])}")
+        self.last_status_block = bytes(data)
+
     def _extract_word(self, data):
         if not data or len(data) < 2:
             return None
@@ -283,22 +306,27 @@ class BridgeSEM:
         return None
 
     def _publish_from_cdb(self, cdb):
-        if not cdb:
+        if not cdb or len(cdb) < 2:
             return
         opcode = cdb[0]
-        if opcode == 0x02 and cdb[1] == 0x01 and cdb[4] == 0x08 and cdb[8] == 0x00:
+        if (
+            opcode == 0x02
+            and len(cdb) > 9
+            and cdb[1] == 0x01
+            and cdb[4] == 0x08
+            and cdb[8] == 0x00
+        ):
             val = struct.unpack("<H", cdb[9:11])[0]
             self._publish_state("ACCV", val)
-        elif opcode == 0x00 and cdb[1] == 0x01 and cdb[4] == 0x00:
+        elif opcode == 0x00 and len(cdb) > 7 and cdb[1] == 0x01 and cdb[4] == 0x00:
             val = struct.unpack(">H", cdb[6:8])[0]
             self._publish_state("SPEED", val)
-        elif opcode == 0x00 and cdb[4] == 0x09:
+        elif opcode == 0x00 and len(cdb) > 5 and cdb[4] == 0x09:
             is_start = cdb[5]
             self._publish_state("SCAN_STATUS", 1 if is_start else 0)
-        elif opcode == 0x03 and cdb[1] == 0x01 and cdb[8] == 0x10:
-            if len(cdb) >= 11:
-                val = struct.unpack("<H", cdb[9:11])[0]
-                self._publish_state("MAG", val)
+        elif opcode == 0x03 and len(cdb) > 9 and cdb[1] == 0x01 and cdb[8] == 0x10:
+            val = struct.unpack("<H", cdb[9:11])[0]
+            self._publish_state("MAG", val)
 
     def start(self):
         try:
@@ -354,18 +382,34 @@ class BridgeSEM:
                 if not cdb or len(cdb) != cdb_len:
                     break
 
+                if cdb[0] == 0xD0 and dir_byte == 1 and len(cdb) > 4:
+                    alloc_len = cdb[4]
+                    if alloc_len and xfer_len < alloc_len:
+                        xfer_len = alloc_len
+
                 data_out = None
                 if dir_byte == 2 and xfer_len > 0:
                     data_out = recvall(conn, xfer_len)
                     if not data_out or len(data_out) != xfer_len:
                         break
 
+                cmd_extra_info = ""
+                if data_out and len(data_out) > 0:
+                    payload = self._format_bytes(data_out)
+                    cmd_extra_info = f"| PAYLOAD: {payload} (len={len(data_out)})"
+
                 # Decode Command Name
                 cmd_name, cmd_level = self.decoder.decode(cdb)
 
                 # Log Command (Before execution)
                 session_logger.log_transaction(
-                    cdb, None, "CMD", 0, cmd_name, defined_level=cmd_level
+                    cdb,
+                    None,
+                    "CMD",
+                    0,
+                    cmd_name,
+                    defined_level=cmd_level,
+                    extra_info=cmd_extra_info,
                 )
 
                 # --- 2.5 Intercept / Patch Logic ---
@@ -417,6 +461,12 @@ class BridgeSEM:
                         val = self._extract_word(resp_data)
                         if val is not None and val > 1000:
                             self._publish_state("ACCV", val)
+                    elif opcode == 0xC6 and cdb[1] in (0x10, 0x19):
+                        val = self._extract_word(resp_data)
+                        if val is not None:
+                            self._publish_state("HT_STATUS", val)
+                    elif opcode == 0xD0:
+                        self._log_status_diff(resp_data)
                     elif inner_cdb and len(inner_cdb) >= 2:
                         inner_opcode = inner_cdb[0]
                         if inner_opcode == 0xC8 and inner_cdb[1] == 0x50:
