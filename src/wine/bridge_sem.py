@@ -397,6 +397,9 @@ class BridgeSEM:
 
     def handle_client(self, conn, addr):
         session_logger = None
+        unit_attention_sent = (
+            False  # Track per-connection: fake Power-On/Reset for CheckSemStatus
+        )
         try:
             session_logger = SCSILogger()
             session_logger.write_meta(f"Client Connected: {addr}")
@@ -477,6 +480,8 @@ class BridgeSEM:
                 resp_data = b""
                 status = 1  # Success
                 detail = "Intercepted"
+                scsi_status = 0
+                sense_bytes = b""
 
                 opcode = cdb[0]
                 inner_cdb = None
@@ -488,31 +493,54 @@ class BridgeSEM:
                 if opcode != 0xFA:
                     self._publish_from_cdb(cdb)
 
-                # --- REMOVED FORCED INTERCEPTION ---
-                # User requested no faking. We rely on the real hardware.
-                # If the app freezes, it means the real hardware response is invalid/unexpected.
-                # We have fixed the xfer_len handling in Step 1, so short reads should be handled by the driver/bridge correctly now.
-
-                # if opcode == 0xC4 and cdb[1] == 0x03:  # GetALS
-                #     intercepted = True
-                #     resp_data = b"\x00\x00\x00\x00"  # 4 bytes
-
-                # elif opcode == 0xCE:  # Extended Status (PCD, ESITF, BCX)
-                #     intercepted = True
-                #     resp_data = b"\x00\x00\x00\x00"  # 4 bytes
-
-                # elif opcode == 0xC7 and cdb[1] == 0x00:  # GetLbgStatus
-                #     intercepted = True
-                #     resp_data = bytes(18)  # 18 bytes of zeros
+                # --- Fake UNIT ATTENTION for CheckSemStatus ---
+                # On real Windows+Adaptec ASPI, the first SCSI command after bus reset
+                # returns UNIT ATTENTION (Sense Key 0x06, ASC 0x29 = Power On/Reset).
+                # CheckSemStatus (FUN_10021475 in SEM32.DLL) checks for this to trigger
+                # sem_ReqVacuumStatus() which sends vacuum init commands (63/65/64 FF).
+                # On Linux, the kernel SCSI subsystem consumes UNIT ATTENTION during
+                # device enumeration before our bridge starts, so the app never sees it.
+                # Fix: Intercept the first CDB 02 00 00 00 00 00 per connection and
+                # return a fake CHECK_CONDITION with UNIT ATTENTION sense data.
+                if (
+                    opcode == 0x02
+                    and cdb == b"\x02\x00\x00\x00\x00\x00"
+                    and not unit_attention_sent
+                ):
+                    intercepted = True
+                    unit_attention_sent = True
+                    resp_data = b""
+                    status = 4  # SS_ERR (shim maps non-1 to SS_ERR)
+                    scsi_status = 0x02  # CHECK_CONDITION
+                    # Standard fixed-format sense: UNIT ATTENTION / Power On Reset
+                    # Byte[2]=0x06 (sense key), Byte[12]=0x29 (ASC), Byte[13]=0x00 (ASCQ)
+                    sense_bytes = (
+                        b"\x70\x00\x06\x00\x00\x00\x00\x0a"
+                        b"\x00\x00\x00\x00\x29\x00\x00\x00"
+                        b"\x00\x00"
+                    )  # 18 bytes
+                    detail = "FAKE_UNIT_ATTENTION (Power On/Reset for vacuum init)"
+                    logger.info(
+                        "Intercepted CheckSemStatus CDB 02: returning fake UNIT ATTENTION "
+                        "(SK=06 ASC=29) to trigger sem_ReqVacuumStatus()"
+                    )
+                    session_logger.write_meta(
+                        "INTERCEPT: Fake UNIT ATTENTION for CheckSemStatus -> "
+                        "will trigger sem_ReqVacuumStatus(63/65/64 FF)"
+                    )
 
                 # --- 3. Execute ---
                 if not intercepted:
-                    resp_data, status, detail, scsi_status, sense_bytes = self.send_scsi_cmd(
-                        cdb, direction=dir_byte, data_out=data_out, xfer_len=xfer_len
+                    resp_data, status, detail, scsi_status, sense_bytes = (
+                        self.send_scsi_cmd(
+                            cdb,
+                            direction=dir_byte,
+                            data_out=data_out,
+                            xfer_len=xfer_len,
+                        )
                     )
                 else:
-                    scsi_status = 0
-                    sense_bytes = b""
+                    pass  # scsi_status and sense_bytes already set by intercept logic
 
                 # --- 3.5 Intercept / Patch Responses (Read Synch) ---
                 # Sniff responses to "Get" commands to sync the shim
@@ -570,7 +598,9 @@ class BridgeSEM:
 
                 # 4. Send Response (extended protocol: status + scsi_tgt_stat + sense_len + sense + data_len + data)
                 sense_to_send = sense_bytes[:32] if sense_bytes else b""
-                resp_header = struct.pack("<BBB", status, scsi_status, len(sense_to_send))
+                resp_header = struct.pack(
+                    "<BBB", status, scsi_status, len(sense_to_send)
+                )
                 conn.sendall(resp_header)
                 if len(sense_to_send) > 0:
                     conn.sendall(sense_to_send)
@@ -627,7 +657,9 @@ class BridgeSEM:
                 fcntl.ioctl(self.dev_fd, SG_IO, io_hdr)
                 status = io_hdr.status
                 sense_len = min(int(io_hdr.sb_len_wr), 32)
-                sense_bytes = bytes(sense_buff.raw[:sense_len]) if sense_len > 0 else b""
+                sense_bytes = (
+                    bytes(sense_buff.raw[:sense_len]) if sense_len > 0 else b""
+                )
                 detail = ""
                 if status != 0 or io_hdr.host_status != 0 or io_hdr.driver_status != 0:
                     sense_hex = (
