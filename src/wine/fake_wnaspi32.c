@@ -221,6 +221,46 @@ DWORD __cdecl SendASPI32Command(PSRB srb_ptr) {
             return SS_ERR;
         }
 
+        // 4b. Receive SCSI Target Status (1 byte) and Sense Data
+        BYTE scsi_target_status = 0;
+        BYTE sense_length = 0;
+        if (RecvAll(emu_socket, (char*)&scsi_target_status, 1) <= 0) {
+            LogMsg("Recv SCSI TgtStat failed");
+            closesocket(emu_socket);
+            emu_socket = INVALID_SOCKET;
+            header->SRB_Status = SS_ERR;
+            return SS_ERR;
+        }
+        if (RecvAll(emu_socket, (char*)&sense_length, 1) <= 0) {
+            LogMsg("Recv SenseLen failed");
+            closesocket(emu_socket);
+            emu_socket = INVALID_SOCKET;
+            header->SRB_Status = SS_ERR;
+            return SS_ERR;
+        }
+        if (sense_length > 0) {
+            BYTE sense_max = (sense_length < cmd->SRB_SenseLen) ? sense_length : cmd->SRB_SenseLen;
+            BYTE sense_buf[32];
+            BYTE recv_len = (sense_length < 32) ? sense_length : 32;
+            if (RecvAll(emu_socket, (char*)sense_buf, recv_len) <= 0) {
+                LogMsg("Recv SenseData failed");
+                closesocket(emu_socket);
+                emu_socket = INVALID_SOCKET;
+                header->SRB_Status = SS_ERR;
+                return SS_ERR;
+            }
+            // Copy sense data into SRB SenseArea
+            memcpy(cmd->SenseArea, sense_buf, (sense_max < recv_len) ? sense_max : recv_len);
+            if (scsi_target_status != 0) {
+                LogMsg("SCSI TgtStat=0x%02X SenseLen=%d Sense=%02X %02X %02X %02X %02X %02X %02X %02X",
+                    scsi_target_status, recv_len,
+                    sense_buf[0], recv_len>1?sense_buf[1]:0, recv_len>2?sense_buf[2]:0,
+                    recv_len>3?sense_buf[3]:0, recv_len>12?sense_buf[12]:0,
+                    recv_len>13?sense_buf[13]:0, recv_len>14?sense_buf[14]:0,
+                    recv_len>15?sense_buf[15]:0);
+            }
+        }
+
         // 5. Receive Data Len (4 bytes)
         DWORD data_len = 0;
         if (RecvAll(emu_socket, (char*)&data_len, 4) <= 0) {
@@ -285,7 +325,7 @@ DWORD __cdecl SendASPI32Command(PSRB srb_ptr) {
 
         header->SRB_Status = (status == SS_COMP) ? SS_COMP : SS_ERR;
         cmd->SRB_HaStat = 0;
-        cmd->SRB_TgtStat = (status == SS_COMP) ? 0 : status;
+        cmd->SRB_TgtStat = scsi_target_status;
         
         // Handle PostProc (Event or Callback)
         if (cmd->SRB_Flags & SRB_EVENT_NOTIFY) { 

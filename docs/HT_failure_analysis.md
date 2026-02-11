@@ -1,26 +1,168 @@
-# JSM-5600 HT 無法開啟 — 問題分析報告
+# JSM-5600 所有操作無回應 — 問題分析報告（含根因定位）
 
-> **日期:** 2026-02-11  
-> **機型:** JSM-5600（實際可能為 JSM-5610，見下文）  
+> **日期:** 2026-02-11（更新：2026-02-12）  
+> **機型:** JSM-5600  
 > **軟體版本:** 5610E Ver5.26（Jsm5000.exe + SEM32.DLL）  
 > **運行環境:** Linux + Wine shim（fake_wnaspi32.dll → TCP bridge → /dev/sgX）  
+> **sem.ini:** `[System] Type=JSM-5600`（已修正，原為 JSM-5610）
+
+---
+
+## 〇、根因總結 ⭐
+
+**所有問題的根本原因：Bridge 層未正確轉發 SCSI sense data（感測資料）。**
+
+### 因果鏈
+```
+1. SEM 硬體在開機後首次通訊時回報 UNIT ATTENTION (Sense Key=0x06, ASC=0x29)
+   → 表示「Power On / Reset」
+
+2. SEM32.DLL 的 CheckSemStatus() 嘗試偵測此狀態
+   → 需要讀取 SRB 結構中的 SRB_TargStat (=0x02) + SenseArea[2] (=0x06) + SenseArea[12] (=0x29)
+
+3. ❌ Bridge (fake_wnaspi32.c) 未轉發 SCSI target status 和 sense data
+   → SRB_TargStat 被設為 4 (SS_ERR) 而非 0x02 (CHECK_CONDITION)
+   → SenseArea 完全沒有填入
+
+4. CheckSemStatus() 無法偵測 power-on → 返回 0 而非 2
+
+5. sem_InitSystem() 跳過 sem_ReqVacuumStatus()
+   → 三條真空初始化指令 (63 FF, 64 FF, 65 FF) 從未發送
+
+6. 硬體停在「Wait」(未初始化) 狀態 → VacuumStatus = 1 (Wait)
+
+7. 所有後續操作命令（HT、Vent、Evac、AccV）被硬體靜默忽略
+```
+
+### 需要修復的程式碼
+- **`bridge_sem.py`**: TCP 回應加入 `scsi_target_status` + `sense_data`
+- **`fake_wnaspi32.c`**: 接收並填入 `SRB_TgtStat` 和 `SRB_SenseArea[]`
 
 ---
 
 ## 一、症狀
 
-按下「HT Ready」按鈕後：
-- 軟體發送 SetHT(1) 指令，SCSI 裝置**回應成功**（status=1）
-- 但隨後讀取 GetHTStatus 始終返回 `0`（HT OFF）
-- HT 高壓**沒有實際開啟**
+### 初始症狀（sem.ini 修正前）
+- 按下「HT Ready」，SetHT(1) SCSI 回應成功，但 GetHTStatus 始終返回 0
+- VacuumStatus = 4 (Ready)，真空似乎正常
+
+### 修正 sem.ini 後的症狀（JSM-5610 → JSM-5600）
+- HT 仍然無法開啟
+- **Vent（通氣）**：按下無反應，VacStatus 不變
+- **Evac（抽真空）**：按下無反應
+- **AccV（加速電壓調整）**：改為 27kV 或 7kV 均無反應
+- VacuumStatus 退化為 **1 (Wait)**（之前是 4=Ready）
+- **所有操作指令的 SCSI 回應都是成功（Status=1），但硬體完全不執行**
 
 ---
 
-## 二、初始化序列分析（從 SCSI 日誌）
+## 二、Bridge 層 SCSI Sense Data 缺失（根因詳述）
 
-以下是 `sem_InitSystem` 的完整初始化過程，從日誌 `sem_session_20260210_170826.log` 開頭擷取：
+### 2.1 正確流程（原始 Windows + WNASPI32）
 
-### 2.1 裝置識別
+```
+SEM32.DLL → SendASPI32Command(SRB)
+         → WNASPI32.DLL → Adaptec SCSI 卡 → 硬體
+         ← WNASPI32 填入完整 SRB：
+             SRB_Status    = SS_ERR (0x04)
+             SRB_TargStat  = CHECK_CONDITION (0x02)
+             SRB_SenseArea = [70 00 06 ... 29 ...]  ← sense data 完整
+         ← SEM32.DLL 讀取 SRB → 偵測到 UNIT ATTENTION → 返回 2
+```
+
+### 2.2 實際流程（Wine + Bridge）
+
+```
+SEM32.DLL → SendASPI32Command(SRB)
+         → fake_wnaspi32.dll → TCP socket → bridge_sem.py → /dev/sgX
+         ← bridge_sem.py 收到 Linux SG_IO 結果：
+             status = 0x02 (CHECK_CONDITION)
+             sense  = 70 00 06 ... 29 ...
+         ← bridge_sem.py 簡化為 1 byte: status=4 (SS_ERR) 經 TCP 回傳
+         ← fake_wnaspi32.c 設定：
+             SRB_Status   = SS_ERR (0x04)     ← ✅ 正確
+             SRB_TargStat = 4 (SS_ERR)        ← ❌ 應該是 0x02
+             SRB_SenseArea = [未填入]          ← ❌ 完全缺失
+         ← SEM32.DLL 讀取 SRB_TargStat：4 ≠ 0x02 → 跳過 sense 檢查 → 返回 0
+```
+
+### 2.3 CheckSemStatus 函式邏輯（FUN_10021475 @ SEM32.DLL）
+
+```c
+// SRB 結構偏移（基於 ASPI Win32 定義）
+// Offset 0x01: SRB_Status    → 需要 == 0x04 (SS_ERR)         ✅ bridge 有設定
+// Offset 0x17: SRB_TargStat  → 需要 == 0x02 (CHECK_CONDITION) ❌ bridge 設成 4
+// Offset 0x42: SenseArea[2]  → 需要 == 0x06 (UNIT ATTENTION)  ❌ bridge 未填入
+// Offset 0x4C: SenseArea[12] → 需要 == 0x29 (Power On/Reset)  ❌ bridge 未填入
+
+if (SRB_Status == 0x04) {                          // SS_ERR
+    if (SRB_TargStat == 0x02) {                    // CHECK_CONDITION  ← 失敗位置!
+        if (SenseArea[2] == 0x06 && SenseArea[12] == 0x29) {
+            OutputDebugString("SCSI PowerON or Reset");
+            return 2;                               // ← 觸發真空初始化
+        }
+    }
+}
+return 0;                                          // ← 實際走到這裡
+```
+
+### 2.4 日誌中的證據
+
+**Init session log (221057)**，第 12 行：
+```
+[ERR] GetHTHeartbeat | CDB: 02 00 00 00 00 00 | Status=4 
+  | SCSI=0x02 Host=0x00 Driver=0x08 
+  | Sense=70 00 06 00 00 00 00 0A 00 00 00 00 29 00 00 00 00 00
+```
+
+bridge_sem.py **正確偵測到** SCSI status=0x02 和完整 sense data，但只把 `status=4` 送回 fake_wnaspi32.c。
+
+### 2.5 修復方案
+
+**`bridge_sem.py`** — 修改 TCP 回應格式：
+```python
+# 現在的格式（5 bytes）:
+resp_header = struct.pack("<BI", status, len(resp_data))
+
+# 修改為（5 + 1 + 1 + N bytes）:
+resp_header = struct.pack("<BIBB", 
+    status,                    # ASPI 狀態 (1=COMP, 4=ERR)
+    len(resp_data),            # 資料長度
+    scsi_target_status,        # SCSI target status (0x00/0x02)
+    len(sense_bytes)           # sense data 長度
+)
+conn.sendall(resp_header)
+if resp_data:
+    conn.sendall(resp_data)
+if sense_bytes:
+    conn.sendall(sense_bytes)  # 追加 sense data
+```
+
+**`fake_wnaspi32.c`** — 接收並填入 SRB：
+```c
+// 接收額外的 target status 和 sense data
+BYTE scsi_tgt_status = 0;
+BYTE sense_len = 0;
+RecvAll(emu_socket, (char*)&scsi_tgt_status, 1);
+RecvAll(emu_socket, (char*)&sense_len, 1);
+
+cmd->SRB_TgtStat = scsi_tgt_status;   // 填入正確的 SCSI target status
+
+if (sense_len > 0) {
+    BYTE sense_buf[32];
+    int to_read = (sense_len < 32) ? sense_len : 32;
+    RecvAll(emu_socket, (char*)sense_buf, to_read);
+    // 複製到 SRB 的 SenseArea
+    int to_copy = (to_read < cmd->SRB_SenseLen) ? to_read : cmd->SRB_SenseLen;
+    memcpy(cmd->SenseArea, sense_buf, to_copy);
+}
+```
+
+---
+
+## 三、初始化序列分析
+
+### 3.1 裝置識別
 
 | 順序 | 時間 | 指令 | 返回資料 | 解讀 |
 |------|------|------|---------|------|
@@ -34,7 +176,7 @@
 - 此值 **不在已知型號表中**（見第三節），走 default 分支
 - 結果：`SemType = 0`，`HdwType = 0`
 
-### 2.2 型號通知
+### 3.2 型號通知
 
 | 順序 | 時間 | Payload | 解讀 |
 |------|------|---------|------|
@@ -49,14 +191,14 @@
 | **JSM-5610** | **0** | **0x01** ← 日誌吻合 ✅ |
 | JSM-5510 | 2 | 0x01 |
 
-**已確認：** `C:\windows\Sem.ini` 中設定 `[System] Type=JSM-5610`，與日誌中的 `3E 01` 完全吻合。
+**已確認並修正：** `C:\windows\Sem.ini` 原設定為 `Type=JSM-5610`（CDB[5]=0x01），已改為 `Type=JSM-5600`。
+新日誌（221057）確認發送 `3E 00`（正確的 JSM-5600 值）。
 
 ```ini
-; 實際檔案位置: ~/.wine/drive_c/windows/Sem.ini
+; 修正後: ~/.wine/drive_c/windows/Sem.ini
 [System]
-Type=JSM-5610
+Type=JSM-5600
 Version=5.26
-Copyright=2001,2005
 UserMode=0
 Path=C:\SEM
 [Image File]
@@ -65,17 +207,18 @@ SaveComp=50
 DTP=ON
 ```
 
-### 2.3 電源狀態檢查
+### 3.3 電源狀態檢查（關鍵問題所在）
 
 | 順序 | 時間 | 指令 | 結果 | 解讀 |
 |------|------|------|------|------|
-| 5 | 17:08:26.910 | `02 00 00 00 00 00` | Status=1（成功，無 sense data） | SEM 非冷開機狀態 |
+| 5 (舊日誌) | 17:08:26.910 | `02 00 00 00 00 00` | Status=1 | 成功（非冷開機？）|
+| 5 (新日誌) | 22:10:57.439 | `02 00 00 00 00 00` | **Status=4**, SCSI=0x02, Sense=70 00 **06** ... **29** | ⚠️ **UNIT ATTENTION / Power On Reset** |
 
 `CheckSemStatus`（`FUN_10021475`）判斷邏輯：
-- Status 成功 + 無 sense data → 返回 **1**（SEM 正在運行）
-- 只有返回 **2**（`UNIT ATTENTION` + `ASC=0x29` Power On Reset）才會觸發 `sem_ReqVacuumStatus`
+- 需要 SRB_TargStat=0x02 + Sense Key=0x06 + ASC=0x29 → 返回 **2**（觸發真空初始化）
+- **但因為 bridge 未轉發 sense data，實際返回 0** ← 根因（見第二節）
 
-### 2.4 ⚠️ 真空初始化 — 未執行
+### 3.4 ⚠️ 真空初始化 — 未執行（根因後果）
 
 因為 CheckSemStatus 返回 1（非冷開機），`sem_ReqVacuumStatus` **完全沒有被呼叫**。
 
@@ -88,7 +231,7 @@ DTP=ON
 
 如果 SEM 硬體端需要這些初始化指令才能正確回報狀態或允許 HT 操作，這可能是問題之一。
 
-### 2.5 後續初始化（正常完成）
+### 3.5 後續初始化（部分完成）
 
 | 時間 | 指令 | 說明 |
 |------|------|------|
@@ -105,7 +248,7 @@ DTP=ON
 
 ---
 
-## 三、HdwType / Mode 系統（逆向 SEM32.DLL）
+## 六、HdwType / Mode 系統（逆向 SEM32.DLL）
 
 SEM32.DLL 只有 **兩個 Mode**，由 `HdwType` 全域變數控制：
 
@@ -140,47 +283,55 @@ SEM32.DLL 只有 **兩個 Mode**，由 `HdwType` 全域變數控制：
 | 值 | 狀態 | 說明 |
 |----|------|------|
 | 0 | ALC | Airlock Chamber 狀態 |
-| 1 | Wait | 等待中 |
+| **1** | **Wait** | **等待中 / 未初始化** ← 目前的狀態 ⚠️ |
 | 2 | Pre Evac | 預抽真空 |
 | 3 | Evac | 正在抽真空 |
-| **4** | **Ready** | **真空就緒** ✅ |
+| 4 | Ready | 真空就緒 |
 | 5 | Vent | 通氣/破真空中 |
 | 6 | EV Ready | 低真空就緒 |
 
-日誌中 `GetVacStatus`（`C4 01`）返回 `00 01 00 04`，解析後 = **4（Ready）**。  
-**真空是就緒的，不是問題所在。**
+### 狀態變化紀錄
+| 日誌 | GetVacStatus 返回 | VacuumStatus 值 |
+|------|-------------------|----------------|
+| 舊日誌（sem.ini=JSM-5610）| `00 01 00 04` | 4 (Ready) |
+| **新日誌（sem.ini=JSM-5600）** | **`00 01 00 00`** | **1 (Wait)** ← 退化 ⚠️ |
+
+VacStatus 從 Ready 退化為 Wait，因為真空初始化從未執行。
 
 ---
 
-## 五、HT Ready 操作時序（第二個 session 日誌）
+## 五、用戶操作測試結果（第二個 session：221139）
+
+### 5.1 Vent（通氣）操作
 
 ```
-17:09:11.518  FA → 03 00 00 02 56 00    (未知初始化指令)
-17:09:11.562  C2 01                      SetFreeze
-17:09:11.606  FA → 06 00 00 02 70 31    (未知)
-17:09:11.693  C2 00 00 00 01 00         SetScanSpeed(1) legacy
-17:09:12.013  FA → 03 01 00 02 51 03    SetFilter(3)
-17:09:12.056  FA → 03 01 00 02 4B 01    SetScanSpeed(1) via FA
-
---- 使用者按下 HT Ready ---
-
-17:09:23.236  FA → 02 01 00 02 40 01    SetHT(1) ← 第一次嘗試
-17:09:23.237  Status=1 (成功)
-
-17:10:11.551  FA → 02 01 00 02 40 01    SetHT(1) ← 再次嘗試
-17:10:11.552  Status=1 (成功)
-
-17:10:31.227  C4 01                     GetVacStatus → 00 01 00 04 (Ready)
-17:10:31.354  FA → 01 01 00 02 43 21    (未知指令)
-17:10:57.012  FA → 02 01 00 02 00 01    (未知指令)
-
-17:11:17~18   FA → 02 01 00 02 40 01    SetHT(1) × 3 次重複
-
-17:11:22.636  C6 10                     GetHTStatus → 00 00 00 00 (HT OFF) ❌
-17:11:24.387  Session Ended
+22:12:06.426  FA → 01 01 00 02 42 01    sem_StartEvac() ← DLL 先檢查 LBG
+22:13:12.957  FA → 01 01 00 02 42 01    sem_StartEvac() 再次嘗試
+22:13:47.282  FA → 01 01 00 02 43 01    sem_StartVent() ← 用戶按 Vent
+22:14:05.755  FA → 01 01 00 02 42 01    sem_StartEvac() ← 用戶按 Evac
+22:14:15.418  FA → 01 01 00 02 42 01    sem_StartEvac() ← 再次
 ```
+**所有指令 SCSI Status=1（成功），但 VacStatus 始終保持 `00 01 00 00` (Wait)**
 
-**SetHT 指令格式完全正確（Mode 0），SCSI 回應成功，但硬體沒有執行。**
+### 5.2 AccV（加速電壓）調整
+
+```
+22:18:27.336  FA → 02 01 00 02 00 03    sem_SetAccvAbs() index=3 → 27 kV
+22:18:46.058  FA → 02 01 00 02 00 17    sem_SetAccvAbs() index=23 → 7 kV
+```
+**所有指令 SCSI Status=1（成功），但 GetAccvValue 不變**
+
+### 5.3 命令格式對照（Mode 0 = HdwType=0, 6-byte 短格式）
+
+| 功能 | DLL 函式 | CDB[4] | Payload | 狀態 |
+|------|---------|--------|---------|------|
+| HT ON | sem_SetHT(1) | 0x40 | `02 01 00 02 40 01` | ❌ 無回應 |
+| Evac | sem_StartEvac() | 0x42 | `01 01 00 02 42 01` | ❌ 無回應 |
+| Vent | sem_StartVent() | 0x43 | `01 01 00 02 43 01` | ❌ 無回應 |
+| SetVacMode | sem_SetVacuumMode() | 0x44 | `01 01 00 02 44 XX` | 未測試 |
+| AccV | sem_SetAccvAbs() | 0x00 | `02 01 00 02 00 [idx]` | ❌ 無回應 |
+| ScanSpeed | sem_SetScanSpeed() | 0x4B | `03 01 00 02 4B XX` | 未確認 |
+| Filter | sem_SetFilter() | 0x51 | `03 01 00 02 51 XX` | 未確認 |
 
 ---
 
@@ -206,28 +357,30 @@ FIS 版本號有正確回應，但所有**狀態和資料都是零**。
 ### 問題 1：CC 81 返回值
 `CC 80`（GetStatusSize）和 `CC 81`（GetHardwareID）返回**完全相同的** `02 00 00 80`。
 - 這正常嗎？
-- `CC 81` 對 JSM-5600/5610 應該返回什麼 model code？
+- `CC 81` 對 JSM-5600 應該返回什麼 model code？
 - 預期是 `0x15E0`（5600）還是其他值？
+- 目前走 default 分支（SemType=0, HdwType=0），功能上應該正確。
 
-### ~~問題 2：sem.ini 的 Type 設定~~ ✅ 已確認
-`C:\windows\Sem.ini` 中 `[System] Type=JSM-5610`，與軟體版本 5610E_Ver5.26 一致。
-日誌中的 `3E 01` 完全正確。**此項不是問題。**
+### 問題 2：UNIT ATTENTION / Power On Reset
+新日誌顯示硬體確實回報了 UNIT ATTENTION（Sense Key=0x06, ASC=0x29），表示硬體需要初始化。
+- 這是否是 JSM-5600 每次冷開機後的正常行為？
+- 如果我們不透過 ASPI，而是直接從 Python 發送 `sem_ReqVacuumStatus` 的三條命令（`63 FF`, `64 FF`, `65 FF`），能否手動完成初始化？
 
-### 問題 3：HT ON 的前置條件
-SetHT 指令 `02 01 00 02 40 01` SCSI 回應成功，但 GetHTStatus 始終為 0。
-- HT 開啟是否需要燈絲先加熱？（FIS 全部返回零）
-- 硬體是否有其他 interlock 條件（如 gun chamber 真空、emission current 等）？
-- 硬體拒絕 HT ON 時是否有任何方式回報原因？
+### 問題 3：HT ON 前置條件
+- 在真空 Wait 狀態下，硬體是否會靜默拒絕所有操作命令？
+- HT 開啟是否需要 VacuumStatus 為 Ready (4)？
+- 是否還有其他 interlock（燈絲、emission current 等）？
 
-### 問題 4：ReqVacuumStatus 是否需要
-`sem_ReqVacuumStatus`（三條 `01 01 00 02 63/64/65 FF` 指令）在非冷開機時不會發送。
-- 在原始 Windows 環境下，這三條指令是否只在第一次上電時發送一次就夠了？
-- 還是每次軟體啟動都需要重新發送？
-
-### 問題 5：Wine/Bridge 透明度
-所有 SCSI 指令都是原封不動 pass-through 到 /dev/sgX（Linux SCSI Generic），沒有任何修改或過濾。
-- 是否有任何 ASPI 層面的行為（例如 timeout 設定、abort 機制）在 Linux SG_IO 中沒有正確模擬？
-- 原始環境使用 WNASPI32 的 Adaptec SCSI 卡，現在用的是什麼 SCSI 控制器？
+### 問題 4：感測資料修復後的預期行為
+如果修復 bridge 讓 sense data 正確回傳，預期流程：
+```
+CheckSemStatus() → 偵測到 Power On/Reset → 返回 2
+→ sem_ReqVacuumStatus() 發送 63 FF, 64 FF, 65 FF
+→ 硬體初始化真空系統
+→ VacuumStatus 從 Wait(1) → 最終 Ready(4)
+→ HT/Vent/Evac/AccV 命令開始正常工作
+```
+這個理解是否正確？
 
 ---
 

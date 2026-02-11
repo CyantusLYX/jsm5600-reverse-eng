@@ -507,9 +507,12 @@ class BridgeSEM:
 
                 # --- 3. Execute ---
                 if not intercepted:
-                    resp_data, status, detail = self.send_scsi_cmd(
+                    resp_data, status, detail, scsi_status, sense_bytes = self.send_scsi_cmd(
                         cdb, direction=dir_byte, data_out=data_out, xfer_len=xfer_len
                     )
+                else:
+                    scsi_status = 0
+                    sense_bytes = b""
 
                 # --- 3.5 Intercept / Patch Responses (Read Synch) ---
                 # Sniff responses to "Get" commands to sync the shim
@@ -565,9 +568,13 @@ class BridgeSEM:
                     extra_info=res_extra,
                 )
 
-                # 4. Send Response
-                resp_header = struct.pack("<BI", status, len(resp_data))
+                # 4. Send Response (extended protocol: status + scsi_tgt_stat + sense_len + sense + data_len + data)
+                sense_to_send = sense_bytes[:32] if sense_bytes else b""
+                resp_header = struct.pack("<BBB", status, scsi_status, len(sense_to_send))
                 conn.sendall(resp_header)
+                if len(sense_to_send) > 0:
+                    conn.sendall(sense_to_send)
+                conn.sendall(struct.pack("<I", len(resp_data)))
                 if len(resp_data) > 0:
                     conn.sendall(resp_data)
 
@@ -636,12 +643,12 @@ class BridgeSEM:
                 if status == 0:
                     if direction == 1:
                         xfered = int(io_hdr.dxfer_len - io_hdr.resid)
-                        return data_buff.raw[:xfered], 1, detail
-                    return b"", 1, detail
-                return b"", 4, detail
+                        return data_buff.raw[:xfered], 1, detail, status, sense_bytes
+                    return b"", 1, detail, status, sense_bytes
+                return b"", 4, detail, status, sense_bytes
         except Exception as e:
             logger.error(f"IOCTL failed: {e}")
-            return b"", 4, f"| IOCTL={e}"
+            return b"", 4, f"| IOCTL={e}", 0, b""
 
 
 if __name__ == "__main__":
