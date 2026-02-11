@@ -98,3 +98,4 @@ uv.lock
 .venv
 opencode.json
 img
+*.pyc

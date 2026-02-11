@@ -249,6 +249,8 @@ class BridgeSEM:
         self.last_status_block = None
         self.last_ht_mode = None
         self.last_ht_state = None
+        self._scsi_lock = threading.Lock()  # Serialize all SCSI device access
+        self._state_lock = threading.Lock()  # Protect shared status state
 
         # --- IPC (ZeroMQ) ---
         self.zmq_pub = None
@@ -281,32 +283,34 @@ class BridgeSEM:
     def _log_status_diff(self, data):
         if not data:
             return ""
-        if self.last_status_block is None:
+        with self._state_lock:
+            if self.last_status_block is None:
+                self.last_status_block = bytes(data)
+                snapshot = self._format_bytes(
+                    data, limit=128
+                )  # Show full 128 bytes on init
+                return f"StatusBlock init: {snapshot}"
+            diffs = []
+            for idx, (old, new) in enumerate(zip(self.last_status_block, data)):
+                if old != new:
+                    diffs.append(f"[{idx}] {old:02X}->{new:02X}")
             self.last_status_block = bytes(data)
-            snapshot = self._format_bytes(
-                data, limit=128
-            )  # Show full 128 bytes on init
-            return f"StatusBlock init: {snapshot}"
-        diffs = []
-        for idx, (old, new) in enumerate(zip(self.last_status_block, data)):
-            if old != new:
-                diffs.append(f"[{idx}] {old:02X}->{new:02X}")
-        self.last_status_block = bytes(data)
-        if diffs:
-            return f"StatusBlock diff: {' '.join(diffs)}"  # Show ALL diffs
-        return ""
+            if diffs:
+                return f"StatusBlock diff: {' '.join(diffs)}"  # Show ALL diffs
+            return ""
 
     def _publish_status_block(self, data):
-        if not data or len(data) < 7:
+        if not data or len(data) < 16:
             return
-        ht_mode = data[4]
-        ht_state = data[6]
-        if ht_mode != self.last_ht_mode:
-            self.last_ht_mode = ht_mode
-            self._publish_state("HT_MODE", ht_mode)
-        if ht_state != self.last_ht_state:
-            self.last_ht_state = ht_state
-            self._publish_state("HT_STATE", ht_state)
+        with self._state_lock:
+            ht_mode = data[4]
+            ht_state = data[6]
+            if ht_mode != self.last_ht_mode:
+                self.last_ht_mode = ht_mode
+                self._publish_state("HT_MODE", ht_mode)
+            if ht_state != self.last_ht_state:
+                self.last_ht_state = ht_state
+                self._publish_state("HT_STATE", ht_state)
 
     def _extract_word(self, data):
         if not data or len(data) < 2:
@@ -419,12 +423,27 @@ class BridgeSEM:
                     break
 
                 if cdb[0] == 0xD0 and dir_byte == 1 and len(cdb) > 4:
-                    alloc_len = cdb[4]
-                    if alloc_len and xfer_len < alloc_len:
+                    # CDB[4] = StatusSize (per-entry size, e.g. 0x8E=142 or 0x80=128)
+                    # SRB_BufLen (xfer_len) should be StatusSize × StatusCount
+                    # from Ghidra: SRB_BufLen = 0x238 (568) for StatusSize=0x8E, Count=4
+                    status_size = cdb[4]
+                    if status_size > 0 and xfer_len == 0:
+                        # DLL sent xfer_len=0, use StatusSize as minimum
+                        # (conservative — we don't know StatusCount here)
                         logger.warning(
-                            f"Length mismatch for D0 cmd: alloc_len={alloc_len}, xfer_len={xfer_len}. Adjusting."
+                            f"D0: xfer_len=0, using StatusSize={status_size} (0x{status_size:02X}) as fallback. "
+                            f"True buf should be StatusSize×StatusCount."
                         )
-                        xfer_len = alloc_len
+                        xfer_len = status_size
+                    elif status_size > 0 and xfer_len < status_size:
+                        logger.warning(
+                            f"D0: xfer_len={xfer_len} < StatusSize={status_size}. Adjusting to StatusSize."
+                        )
+                        xfer_len = status_size
+                    logger.debug(
+                        f"D0 ReadStatusBlock: CDB[4](StatusSize)=0x{status_size:02X}({status_size}), "
+                        f"xfer_len={xfer_len}(0x{xfer_len:X})"
+                    )
 
                 data_out = None
                 if dir_byte == 2 and xfer_len > 0:
@@ -597,28 +616,29 @@ class BridgeSEM:
         io_hdr.sbp = ctypes.cast(sense_buff, ctypes.c_void_p)
 
         try:
-            fcntl.ioctl(self.dev_fd, SG_IO, io_hdr)
-            status = io_hdr.status
-            sense_len = min(int(io_hdr.sb_len_wr), 32)
-            sense_bytes = bytes(sense_buff.raw[:sense_len]) if sense_len > 0 else b""
-            detail = ""
-            if status != 0 or io_hdr.host_status != 0 or io_hdr.driver_status != 0:
-                sense_hex = (
-                    " ".join(f"{b:02X}" for b in sense_bytes) if sense_bytes else ""
-                )
-                detail = (
-                    f"| SCSI=0x{status:02X} Host=0x{io_hdr.host_status:02X} "
-                    f"Driver=0x{io_hdr.driver_status:02X}"
-                )
-                if sense_hex:
-                    detail += f" Sense={sense_hex}"
+            with self._scsi_lock:
+                fcntl.ioctl(self.dev_fd, SG_IO, io_hdr)
+                status = io_hdr.status
+                sense_len = min(int(io_hdr.sb_len_wr), 32)
+                sense_bytes = bytes(sense_buff.raw[:sense_len]) if sense_len > 0 else b""
+                detail = ""
+                if status != 0 or io_hdr.host_status != 0 or io_hdr.driver_status != 0:
+                    sense_hex = (
+                        " ".join(f"{b:02X}" for b in sense_bytes) if sense_bytes else ""
+                    )
+                    detail = (
+                        f"| SCSI=0x{status:02X} Host=0x{io_hdr.host_status:02X} "
+                        f"Driver=0x{io_hdr.driver_status:02X}"
+                    )
+                    if sense_hex:
+                        detail += f" Sense={sense_hex}"
 
-            if status == 0:
-                if direction == 1:
-                    xfered = int(io_hdr.dxfer_len - io_hdr.resid)
-                    return data_buff.raw[:xfered], 1, detail
-                return b"", 1, detail
-            return b"", 4, detail
+                if status == 0:
+                    if direction == 1:
+                        xfered = int(io_hdr.dxfer_len - io_hdr.resid)
+                        return data_buff.raw[:xfered], 1, detail
+                    return b"", 1, detail
+                return b"", 4, detail
         except Exception as e:
             logger.error(f"IOCTL failed: {e}")
             return b"", 4, f"| IOCTL={e}"

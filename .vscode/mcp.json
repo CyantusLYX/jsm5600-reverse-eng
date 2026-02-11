@@ -1,0 +1,14 @@
+{
+  "servers": {
+    "ghydra": {
+      "command": "uv",
+      "args": [
+        "run",
+        "/home/cyantus/.mcp/bridge_mcp_hydra.py"
+      ],
+      "env": {
+        "GHIDRA_HYDRA_HOST": "localhost"
+      }
+    }
+  }
+}

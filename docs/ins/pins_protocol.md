@@ -324,7 +324,7 @@
 - **OL WD Adj**: `[CA 97 00 04]`
 - **Auto AD Adjust**: `[CA 98 00 04]`
 - **Stig X/Y Wobb**: `[CA 9A/9B 00 04]`
-- **AGC Type**: `[CA 9D 00 04]`
+- **AGC Type**: `[CA 9D 00 00 04 00]` (對應 `sem_GetAGCType`, `FUN_1002177c(0xCA, 0x9D, ..., 4)`)
 - **AFS Value**: `[CA 9E 00 04]`
 
 ### 5. 樣品台 (Group CB)

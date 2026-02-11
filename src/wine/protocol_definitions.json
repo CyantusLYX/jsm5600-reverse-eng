@@ -204,6 +204,21 @@
                 { "name": "GetBrightness", "level": "LOG", "match": { "0": "0xC8", "1": "0x81" } }
             ]
         },
+        "0xCA": {
+            "name": "ReadAutoValues",
+            "matches": [
+                { "name": "GetACB", "level": "LOG", "match": { "0": "0xCA", "1": "0x90" } },
+                { "name": "GetASD", "level": "LOG", "match": { "0": "0xCA", "1": "0x91" } },
+                { "name": "GetAFD", "level": "LOG", "match": { "0": "0xCA", "1": "0x92" } },
+                { "name": "GetPHAuto", "level": "LOG", "match": { "0": "0xCA", "1": "0x94" } },
+                { "name": "GetOLWDAdj", "level": "LOG", "match": { "0": "0xCA", "1": "0x97" } },
+                { "name": "GetAutoADAdj", "level": "LOG", "match": { "0": "0xCA", "1": "0x98" } },
+                { "name": "GetStigXWobb", "level": "LOG", "match": { "0": "0xCA", "1": "0x9A" } },
+                { "name": "GetStigYWobb", "level": "LOG", "match": { "0": "0xCA", "1": "0x9B" } },
+                { "name": "GetAGCType", "level": "LOG", "match": { "0": "0xCA", "1": "0x9D" } },
+                { "name": "GetAFS", "level": "LOG", "match": { "0": "0xCA", "1": "0x9E" } }
+            ]
+        },
         "0xCB": {
             "name": "ReadStage",
             "matches": [
