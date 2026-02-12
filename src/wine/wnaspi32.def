@@ -2,3 +2,7 @@ LIBRARY wnaspi32.dll
 EXPORTS
     GetASPI32SupportInfo
     SendASPI32Command
+    GetASPI32DLLVersion
+    GetASPI32Buffer
+    FreeASPI32Buffer
+    TranslateASPI32Address

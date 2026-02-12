@@ -1,0 +1,60 @@
+diff --git a/dlls/winaspi.dll16/winaspi.c b/dlls/winaspi.dll16/winaspi.c
+index b323234..26f3e54 100644
+--- a/dlls/winaspi.dll16/winaspi.c
++++ b/dlls/winaspi.dll16/winaspi.c
+@@ -135,6 +135,11 @@ static SEGPTR exec_cmd16;
+ 
+ static void SRB_PostProc( SRB_ExecSCSICmd *cmd32 )
+ {
++    if (!exec_postproc16)
++    {
++        WARN("SRB_PostProc called with NULL 16-bit callback\n");
++        return;
++    }
+     WOWCallback16( (DWORD)exec_postproc16, exec_cmd16 );
+ }
+ 
+@@ -177,8 +182,22 @@ WORD WINAPI SendASPICommand16(SEGPTR segptr_srb)
+         return ret;
+ 
+     case SC_GET_DEV_TYPE:
+-        FIXME("Not implemented SC_GET_DEV_TYPE\n");
+-        break;
++        srb32.devtype.SRB_Cmd = srb16->devtype.SRB_Cmd;
++        srb32.devtype.SRB_Status = srb16->devtype.SRB_Status;
++        srb32.devtype.SRB_HaId = srb16->devtype.SRB_HaId;
++        srb32.devtype.SRB_Flags = srb16->devtype.SRB_Flags;
++        srb32.devtype.SRB_Hdr_Rsvd = srb16->devtype.SRB_Hdr_Rsvd;
++        srb32.devtype.SRB_Target = srb16->devtype.SRB_Target;
++        srb32.devtype.SRB_Lun = srb16->devtype.SRB_Lun;
++        ret = SendASPI32Command( &srb32 );
++        srb16->devtype.SRB_Status = srb32.devtype.SRB_Status;
++        srb16->devtype.SRB_DeviceType = srb32.devtype.SRB_DeviceType;
++        return ret;
++
++    case SC_ABORT_SRB:
++        /* Minimal no-op to keep legacy init paths moving. */
++        srb16->abort.SRB_Status = SS_COMP;
++        return SS_COMP;
+ 
+     case SC_EXEC_SCSI_CMD:
+         srb32.cmd.SRB_Cmd = srb16->cmd.SRB_Cmd;
+@@ -208,8 +227,16 @@ WORD WINAPI SendASPICommand16(SEGPTR segptr_srb)
+         return ret;
+ 
+     case SC_RESET_DEV:
+-        FIXME("Not implemented SC_RESET_DEV\n");
+-        break;
++        /*
++         * Some legacy stacks issue a reset early and tolerate a no-op success.
++         * Report completion and perform post callback if requested.
++         */
++        srb16->reset.SRB_Status = SS_COMP;
++        srb16->reset.SRB_HaStat = HASTAT_OK;
++        srb16->reset.SRB_TargStat = 0;
++        if ((srb16->reset.SRB_Flags & SRB_POSTING) && srb16->reset.SRB_PostProc)
++            WOWCallback16( (DWORD)srb16->reset.SRB_PostProc, segptr_srb );
++        return SS_COMP;
+ 
+     default:
+         FIXME("Unknown command %d\n", srb16->common.SRB_Cmd);

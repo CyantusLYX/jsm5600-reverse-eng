@@ -1,0 +1,118 @@
+diff --git a/dlls/ole2disp.dll16/ole2disp.c b/dlls/ole2disp.dll16/ole2disp.c
+index 8318ae8..4535446 100644
+--- a/dlls/ole2disp.dll16/ole2disp.c
++++ b/dlls/ole2disp.dll16/ole2disp.c
+@@ -466,8 +466,40 @@ int WINAPI SysStringLen16(BSTR16 str)
+  */
+ HRESULT WINAPI VariantChangeType16(VARIANTARG *vargDest, VARIANTARG *varSrc, unsigned short flags, VARTYPE vt)
+ {
+-    FIXME("stub: (%p, %p, %d, %d)\n", vargDest, varSrc, flags, vt);
+-    return E_NOTIMPL;
++    VARIANTARG16 *dest16 = (VARIANTARG16 *)vargDest;
++    const VARIANTARG16 *src16 = (const VARIANTARG16 *)varSrc;
++
++    TRACE("(%p, %p, %u, %u)\n", vargDest, varSrc, flags, vt);
++
++    (void)flags;
++
++    if (!dest16)
++        return E_INVALIDARG;
++
++    switch (vt)
++    {
++    case VT_I4:
++        dest16->vt = VT_I4;
++        if (!src16) dest16->u.lVal = 0;
++        else if (src16->vt == VT_I2) dest16->u.lVal = src16->u.iVal;
++        else if (src16->vt == VT_I4) dest16->u.lVal = src16->u.lVal;
++        else dest16->u.lVal = 0;
++        return S_OK;
++
++    case VT_BSTR:
++        dest16->vt = VT_BSTR;
++        dest16->u.bstrVal = (SEGPTR)SysAllocStringLen16("", 0);
++        return S_OK;
++
++    case VT_BOOL:
++        dest16->vt = VT_BOOL;
++        dest16->u.boolVal = VARIANT_FALSE;
++        return S_OK;
++
++    default:
++        FIXME("partial stub does not support vt=%u\n", vt);
++        return E_NOTIMPL;
++    }
+ }
+ 
+ 
+@@ -512,8 +544,26 @@ HRESULT WINAPI RegisterActiveObject16(
+  */
+ HRESULT WINAPI VariantChangeTypeEx16(VARIANTARG *dest, const VARIANTARG *src, LCID lcid, USHORT flags, VARTYPE vt)
+ {
+-        FIXME("stub: %p %p %ld %d %d\n", dest, src, lcid, flags, vt);
+-        return E_INVALIDARG;
++        VARIANTARG16 *dest16 = (VARIANTARG16 *)dest;
++
++        TRACE("(%p, %p, %ld, %u, %u)\n", dest, src, lcid, flags, vt);
++
++        (void)src;
++        (void)lcid;
++        (void)flags;
++
++        if (!dest16)
++                return E_INVALIDARG;
++
++        if (vt != VT_BOOL)
++        {
++                FIXME("partial stub only supports VT_BOOL, got vt=%u\n", vt);
++                return E_NOTIMPL;
++        }
++
++        dest16->vt = VT_BOOL;
++        dest16->u.boolVal = VARIANT_FALSE;
++        return S_OK;
+ }
+ 
+ /******************************************************************************
+@@ -525,6 +575,26 @@ HRESULT WINAPI SetErrorInfo16(ULONG dwReserved, IErrorInfo *perrinfo)
+         return E_INVALIDARG;
+ }
+ 
++/******************************************************************************
++ * GetErrorInfo [OLE2DISP.111]
++ */
++HRESULT WINAPI GetErrorInfo16(ULONG dwReserved, IErrorInfo **pperrinfo)
++{
++        FIXME("stub: (%ld, %p)\n", dwReserved, pperrinfo);
++        if (pperrinfo) *pperrinfo = NULL;
++        return S_FALSE;
++}
++
++/******************************************************************************
++ * CreateErrorInfo [OLE2DISP.112]
++ */
++HRESULT WINAPI CreateErrorInfo16(ICreateErrorInfo **pperrinfo)
++{
++        FIXME("stub: (%p)\n", pperrinfo);
++        if (pperrinfo) *pperrinfo = NULL;
++        return E_NOTIMPL;
++}
++
+ /******************************************************************************
+  * VariantInit [OLE2DISP.8]
+  */
+diff --git a/dlls/ole2disp.dll16/ole2disp.dll16.spec b/dlls/ole2disp.dll16/ole2disp.dll16.spec
+index 57d2254..7064c5d 100644
+--- a/dlls/ole2disp.dll16/ole2disp.dll16.spec
++++ b/dlls/ole2disp.dll16/ole2disp.dll16.spec
+@@ -108,8 +108,8 @@
+ 108 pascal VariantChangeTypeEx(ptr ptr long word word) VariantChangeTypeEx16
+ 109 stub SAFEARRAYPTROFINDEX
+ 110 pascal SetErrorInfo(long ptr) SetErrorInfo16
+-111 stub GETERRORINFO
+-112 stub CREATEERRORINFO
++111 pascal GetErrorInfo(long ptr) GetErrorInfo16
++112 pascal CreateErrorInfo(ptr) CreateErrorInfo16
+ 113 variable _IID_IErrorInfo(0x1cf2b120 0x101b547d 0x0008658e 0x19d12b2b)
+ 114 variable _IID_ICreateErrorInfo(0x22f03340 0x101b547d 0x0008658e 0x19d12b2b)
+ 115 variable _IID_ISupportErrorInfo(0xdf0b3d60 0x101b548f 0x0008658e 0x19d12b2b)

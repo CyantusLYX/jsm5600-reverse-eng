@@ -1,0 +1,26 @@
+diff --git a/dlls/krnl386.exe16/ne_module.c b/dlls/krnl386.exe16/ne_module.c
+index aeb0a2e..1d58884 100644
+--- a/dlls/krnl386.exe16/ne_module.c
++++ b/dlls/krnl386.exe16/ne_module.c
+@@ -987,8 +987,19 @@ static HINSTANCE16 MODULE_LoadModule16( LPCSTR libname, BOOL implicit, BOOL lib_
+                     /* check if module was loaded native */
+                     if (LdrFindEntryForAddress( main_owner, &ldr ) || !(ldr->Flags & LDR_WINE_INTERNAL))
+                     {
+-                        FreeLibrary( mod32 );
+-                        descr = NULL;
++                        /*
++                         * Legacy stacks may import 16-bit WINASPI.DLL while overriding
++                         * 32-bit WNASPI32.DLL with a native shim. Allow this pairing.
++                         */
++                        if (!strcasecmp( libname, "WINASPI.DLL" ) && !strcasecmp( main_module, "wnaspi32.dll" ))
++                        {
++                            TRACE( "allowing builtin %s with native owner %s\n", libname, main_module );
++                        }
++                        else
++                        {
++                            FreeLibrary( mod32 );
++                            descr = NULL;
++                        }
+                     }
+                     FreeLibrary( main_owner );
+                 }

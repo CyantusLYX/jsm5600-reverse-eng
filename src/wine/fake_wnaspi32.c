@@ -37,6 +37,13 @@ typedef struct {
 } SRB_GDEVBlock, *PSRB_GDEVBlock;
 #pragma pack()
 
+typedef struct {
+    BYTE *AB_BufPointer;
+    DWORD AB_BufLen;
+    DWORD AB_ZeroFill;
+    DWORD AB_Reserved;
+} ASPI32BUFF, *PASPI32BUFF;
+
 BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved) {
     if (fdwReason == DLL_PROCESS_ATTACH) {
         // We can't use LogMsg easily here if it depends on winsock not init yet?
@@ -125,6 +132,33 @@ DWORD __cdecl GetASPI32SupportInfo(void) {
     LogMsg("GetASPI32SupportInfo called");
     // LOBYTE: Adapters (1), HIBYTE: Status (SS_COMP = 1)
     return (1 << 8) | 1;
+}
+
+DWORD __cdecl GetASPI32DLLVersion(void) {
+    LogMsg("GetASPI32DLLVersion called");
+    return 2;
+}
+
+BOOL __cdecl GetASPI32Buffer(PASPI32BUFF pab) {
+    if (!pab) return FALSE;
+    pab->AB_BufPointer = (BYTE *)HeapAlloc(GetProcessHeap(),
+        pab->AB_ZeroFill ? HEAP_ZERO_MEMORY : 0,
+        pab->AB_BufLen);
+    LogMsg("GetASPI32Buffer len=%lu ptr=%p", (unsigned long)pab->AB_BufLen, pab->AB_BufPointer);
+    return pab->AB_BufPointer != NULL;
+}
+
+BOOL __cdecl FreeASPI32Buffer(PASPI32BUFF pab) {
+    if (!pab || !pab->AB_BufPointer) return FALSE;
+    LogMsg("FreeASPI32Buffer ptr=%p", pab->AB_BufPointer);
+    HeapFree(GetProcessHeap(), 0, pab->AB_BufPointer);
+    pab->AB_BufPointer = NULL;
+    return TRUE;
+}
+
+BOOL __cdecl TranslateASPI32Address(LPDWORD pdwPath, LPDWORD pdwDEVNODE) {
+    LogMsg("TranslateASPI32Address called path=%p devnode=%p", pdwPath, pdwDEVNODE);
+    return TRUE;
 }
 
 DWORD __cdecl SendASPI32Command(PSRB srb_ptr) {

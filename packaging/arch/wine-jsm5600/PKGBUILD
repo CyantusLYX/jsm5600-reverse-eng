@@ -1,0 +1,67 @@
+pkgname=wine-jsm5600
+pkgver=11.2
+pkgrel=1
+pkgdesc='Patched Wine build for JSM5600 16-bit startup fixes'
+arch=('x86_64')
+url='https://gitlab.winehq.org/wine/wine'
+license=('LGPL-2.1-or-later')
+depends=('freetype2' 'fontconfig' 'libx11' 'libxext' 'libxrender' 'libxrandr' 'libxinerama' 'libxi' 'libxcursor' 'libxfixes' 'libxxf86vm' 'libxcomposite' 'libxkbcommon' 'libxkbregistry' 'dbus' 'gnutls' 'libpulse' 'alsa-lib' 'sdl2' 'vulkan-icd-loader')
+makedepends=('git' 'gcc-multilib' 'mingw-w64-gcc' 'flex' 'bison' 'perl' 'pkgconf' 'python')
+provides=('wine-jsm5600')
+conflicts=('wine-jsm5600')
+options=('!lto' '!strip')
+source=(
+  "wine-${pkgver}.tar.gz::https://gitlab.winehq.org/wine/wine/-/archive/wine-${pkgver}/wine-wine-${pkgver}.tar.gz"
+  '0001-compobj16-lazy-init.patch'
+  '0002-winnls16-sendimemessage.patch'
+  '0003-ole2disp16-errorinfo-stubs.patch'
+  '0004-winaspi16-legacy-commands.patch'
+  '0005-krnl386-allow-winaspi-native-owner.patch'
+)
+sha256sums=(
+  'SKIP'
+  'efc0d9c6c139bf91f294baf2320220b317246ee135f9762df5f8591cdfac2adf'
+  'cd88974b888fc413fcec928cc95189ec4f7c88a11fd334c5a39fcc2a69b2f8ce'
+  '1f7dc93a57070ad2254b4507865411310c814f8e5dc9399a373fe6a532ada2b9'
+  'c103b65ee3c314bcb741cc9b169e21a05e061f53aed012823049728634b8c3b7'
+  'fbd17a30dba07186a8c4fbf592c2003b660fb0aa3766ca7f25433b88541afea6'
+)
+
+prepare() {
+  cd "${srcdir}/wine-wine-${pkgver}"
+  patch -Np1 -i "${srcdir}/0001-compobj16-lazy-init.patch"
+  patch -Np1 -i "${srcdir}/0002-winnls16-sendimemessage.patch"
+  patch -Np1 -i "${srcdir}/0003-ole2disp16-errorinfo-stubs.patch"
+  patch -Np1 -i "${srcdir}/0004-winaspi16-legacy-commands.patch"
+  patch -Np1 -i "${srcdir}/0005-krnl386-allow-winaspi-native-owner.patch"
+}
+
+build() {
+  local _src="${srcdir}/wine-wine-${pkgver}"
+  mkdir -p "${srcdir}/build"
+  cd "${srcdir}/build"
+
+  "${_src}/configure" \
+    --prefix=/opt/wine-jsm5600 \
+    --enable-win64
+
+  make
+}
+
+package() {
+  cd "${srcdir}/build"
+  make DESTDIR="${pkgdir}" install
+
+  install -d "${pkgdir}/usr/bin"
+  cat > "${pkgdir}/usr/bin/wine-jsm5600" <<'EOF'
+#!/bin/sh
+exec /opt/wine-jsm5600/bin/wine "$@"
+EOF
+  chmod 0755 "${pkgdir}/usr/bin/wine-jsm5600"
+
+  cat > "${pkgdir}/usr/bin/wineserver-jsm5600" <<'EOF'
+#!/bin/sh
+exec /opt/wine-jsm5600/bin/wineserver "$@"
+EOF
+  chmod 0755 "${pkgdir}/usr/bin/wineserver-jsm5600"
+}

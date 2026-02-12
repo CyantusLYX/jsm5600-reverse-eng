@@ -1,0 +1,33 @@
+diff --git a/dlls/winnls.dll16/winnls.c b/dlls/winnls.dll16/winnls.c
+index efe64ff..9294ea1 100644
+--- a/dlls/winnls.dll16/winnls.c
++++ b/dlls/winnls.dll16/winnls.c
+@@ -42,3 +42,15 @@ BOOL WINAPI WINNLSGetEnableStatus16( HWND16 hwnd )
+ {
+     return WINNLS32GetEnableStatus( HWND_32(hwnd) );
+ }
++
++/***********************************************************************
++ *              WINNLSSendIMEMessage (WINNLS.6)
++ */
++BOOL WINAPI WINNLSSendIMEMessage16( WORD a, WORD b, WORD c, WORD d )
++{
++    (void)a;
++    (void)b;
++    (void)c;
++    (void)d;
++    return TRUE;
++}
+diff --git a/dlls/winnls.dll16/winnls.dll16.spec b/dlls/winnls.dll16/winnls.dll16.spec
+index 0f2b7ce..130eb6c 100644
+--- a/dlls/winnls.dll16/winnls.dll16.spec
++++ b/dlls/winnls.dll16/winnls.dll16.spec
+@@ -3,7 +3,7 @@
+ #3   stub ___EXPORTEDSTUB
+ 4   stub ENUMGETFONTTYPE
+ 5   stub ENUMFACENOTTT
+-6   stub SENDIMEMESSAGE
++6   pascal -ret16 SENDIMEMESSAGE(word word word word) WINNLSSendIMEMessage16
+ 7   stub SENDIMEMESSAGEEX
+ 9   stub SENDIMEMESSAGEINTERNAL
+ 10  stub WINNLSSETKEYBOARDHOOK
