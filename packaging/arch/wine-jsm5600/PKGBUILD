@@ -5,10 +5,6 @@ pkgdesc='Patched Wine build for JSM5600 16-bit startup fixes'
 arch=('x86_64')
 url='https://gitlab.winehq.org/wine/wine'
 license=('LGPL-2.1-or-later')
-depends=('freetype2' 'fontconfig' 'libx11' 'libxext' 'libxrender' 'libxrandr' 'libxinerama' 'libxi' 'libxcursor' 'libxfixes' 'libxxf86vm' 'libxcomposite' 'libxkbcommon' 'libxkbregistry' 'dbus' 'gnutls' 'libpulse' 'alsa-lib' 'sdl2' 'vulkan-icd-loader')
-makedepends=('git' 'gcc-multilib' 'mingw-w64-gcc' 'flex' 'bison' 'perl' 'pkgconf' 'python')
-provides=('wine-jsm5600')
-conflicts=('wine-jsm5600')
 options=('!lto' '!strip')
 source=(
   "wine-${pkgver}.tar.gz::https://gitlab.winehq.org/wine/wine/-/archive/wine-${pkgver}/wine-wine-${pkgver}.tar.gz"
