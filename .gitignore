@@ -99,3 +99,13 @@ uv.lock
 opencode.json
 img
 *.pyc
+# Arch Linux Packaging
+packaging/arch/wine-jsm5600/src/
+packaging/arch/wine-jsm5600/pkg/
+packaging/arch/wine-jsm5600/*.tar.gz
+packaging/arch/wine-jsm5600/*.pkg.tar.*
+packaging/arch/wine-jsm5600/*.sig
+
+# Archives
+*.gz
+*.zst
