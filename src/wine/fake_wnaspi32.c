@@ -56,6 +56,7 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved) {
 /* --- Global State --- */
 static SOCKET emu_socket = INVALID_SOCKET;
 static BOOL winsock_init = FALSE;
+static const DWORD kSockTimeoutMs = 1200;
 
 static void LogMsg(const char* fmt, ...) {
     char buffer[1024];
@@ -98,8 +99,29 @@ static BOOL ConnectToEmulator() {
         return FALSE;
     }
 
+    setsockopt(emu_socket, SOL_SOCKET, SO_RCVTIMEO, (const char*)&kSockTimeoutMs, sizeof(kSockTimeoutMs));
+    setsockopt(emu_socket, SOL_SOCKET, SO_SNDTIMEO, (const char*)&kSockTimeoutMs, sizeof(kSockTimeoutMs));
+
     LogMsg("Connected to Virtual SEM Emulator");
     return TRUE;
+}
+
+static void ResetEmuSocket(void) {
+    if (emu_socket != INVALID_SOCKET) {
+        closesocket(emu_socket);
+        emu_socket = INVALID_SOCKET;
+    }
+}
+
+static DWORD CompleteExecSrb(SRB_ExecSCSICmd *cmd, BYTE aspi_status, BYTE scsi_tgt_status) {
+    if (!cmd) return aspi_status;
+    cmd->SRB_Status = aspi_status;
+    cmd->SRB_HaStat = 0;
+    cmd->SRB_TgtStat = scsi_tgt_status;
+    if ((cmd->SRB_Flags & SRB_EVENT_NOTIFY) && cmd->SRB_PostProc) {
+        SetEvent((HANDLE)cmd->SRB_PostProc);
+    }
+    return aspi_status;
 }
 
 static int SendAll(SOCKET sock, const char *data, int length) {
@@ -191,9 +213,13 @@ DWORD __cdecl SendASPI32Command(PSRB srb_ptr) {
     }
 
     if (header->SRB_Cmd == SC_EXEC_SCSI_CMD) {
+        if (cmd->SRB_CDBLen == 0 || cmd->SRB_CDBLen > 16) {
+            LogMsg("Invalid CDB length: %u", cmd->SRB_CDBLen);
+            return CompleteExecSrb(cmd, SS_ERR, 0);
+        }
+
         if (!ConnectToEmulator()) {
-            header->SRB_Status = SS_ERR;
-            return SS_ERR;
+            return CompleteExecSrb(cmd, SS_ERR, 0);
         }
 
         DWORD cdb_len = cmd->SRB_CDBLen;
@@ -212,36 +238,28 @@ DWORD __cdecl SendASPI32Command(PSRB srb_ptr) {
         memcpy(header_buf + 5, &xfer_len, 4);
         if (SendAll(emu_socket, header_buf, sizeof(header_buf)) != sizeof(header_buf)) {
             LogMsg("Send Header failed");
-            closesocket(emu_socket);
-            emu_socket = INVALID_SOCKET;
-            header->SRB_Status = SS_ERR;
-            return SS_ERR;
+            ResetEmuSocket();
+            return CompleteExecSrb(cmd, SS_ERR, 0);
         }
 
         // 2. Send CDB
         if (SendAll(emu_socket, (char*)cmd->CDBByte, cdb_len) != (int)cdb_len) {
             LogMsg("Send CDB failed");
-            closesocket(emu_socket);
-            emu_socket = INVALID_SOCKET;
-            header->SRB_Status = SS_ERR;
-            return SS_ERR;
+            ResetEmuSocket();
+            return CompleteExecSrb(cmd, SS_ERR, 0);
         }
 
         // 3. Send Data-Out if needed
         if (dir == 2 && xfer_len > 0) {
             if (!cmd->SRB_BufPointer) {
                 LogMsg("Send Data-Out failed: NULL buffer");
-                closesocket(emu_socket);
-                emu_socket = INVALID_SOCKET;
-                header->SRB_Status = SS_ERR;
-                return SS_ERR;
+                ResetEmuSocket();
+                return CompleteExecSrb(cmd, SS_ERR, 0);
             }
             if (SendAll(emu_socket, (char*)cmd->SRB_BufPointer, xfer_len) != (int)xfer_len) {
                 LogMsg("Send Data-Out failed");
-                closesocket(emu_socket);
-                emu_socket = INVALID_SOCKET;
-                header->SRB_Status = SS_ERR;
-                return SS_ERR;
+                ResetEmuSocket();
+                return CompleteExecSrb(cmd, SS_ERR, 0);
             }
         }
 
@@ -249,10 +267,8 @@ DWORD __cdecl SendASPI32Command(PSRB srb_ptr) {
         BYTE status = 0;
         if (RecvAll(emu_socket, (char*)&status, 1) <= 0) {
             LogMsg("Recv Status failed");
-            closesocket(emu_socket);
-            emu_socket = INVALID_SOCKET;
-            header->SRB_Status = SS_ERR;
-            return SS_ERR;
+            ResetEmuSocket();
+            return CompleteExecSrb(cmd, SS_ERR, 0);
         }
 
         // 4b. Receive SCSI Target Status (1 byte) and Sense Data
@@ -260,17 +276,13 @@ DWORD __cdecl SendASPI32Command(PSRB srb_ptr) {
         BYTE sense_length = 0;
         if (RecvAll(emu_socket, (char*)&scsi_target_status, 1) <= 0) {
             LogMsg("Recv SCSI TgtStat failed");
-            closesocket(emu_socket);
-            emu_socket = INVALID_SOCKET;
-            header->SRB_Status = SS_ERR;
-            return SS_ERR;
+            ResetEmuSocket();
+            return CompleteExecSrb(cmd, SS_ERR, 0);
         }
         if (RecvAll(emu_socket, (char*)&sense_length, 1) <= 0) {
             LogMsg("Recv SenseLen failed");
-            closesocket(emu_socket);
-            emu_socket = INVALID_SOCKET;
-            header->SRB_Status = SS_ERR;
-            return SS_ERR;
+            ResetEmuSocket();
+            return CompleteExecSrb(cmd, SS_ERR, 0);
         }
         if (sense_length > 0) {
             BYTE sense_max = (sense_length < cmd->SRB_SenseLen) ? sense_length : cmd->SRB_SenseLen;
@@ -278,10 +290,8 @@ DWORD __cdecl SendASPI32Command(PSRB srb_ptr) {
             BYTE recv_len = (sense_length < 32) ? sense_length : 32;
             if (RecvAll(emu_socket, (char*)sense_buf, recv_len) <= 0) {
                 LogMsg("Recv SenseData failed");
-                closesocket(emu_socket);
-                emu_socket = INVALID_SOCKET;
-                header->SRB_Status = SS_ERR;
-                return SS_ERR;
+                ResetEmuSocket();
+                return CompleteExecSrb(cmd, SS_ERR, 0);
             }
             // Copy sense data into SRB SenseArea
             memcpy(cmd->SenseArea, sense_buf, (sense_max < recv_len) ? sense_max : recv_len);
@@ -299,10 +309,8 @@ DWORD __cdecl SendASPI32Command(PSRB srb_ptr) {
         DWORD data_len = 0;
         if (RecvAll(emu_socket, (char*)&data_len, 4) <= 0) {
             LogMsg("Recv DataLen failed");
-            closesocket(emu_socket);
-            emu_socket = INVALID_SOCKET;
-            header->SRB_Status = SS_ERR;
-            return SS_ERR;
+            ResetEmuSocket();
+            return CompleteExecSrb(cmd, SS_ERR, 0);
         }
 
         // 6. Receive Data
@@ -320,10 +328,8 @@ DWORD __cdecl SendASPI32Command(PSRB srb_ptr) {
 
             if (RecvAll(emu_socket, (char*)(cmd->SRB_BufPointer), bytes_to_read) <= 0) {
                 LogMsg("Recv Data failed");
-                closesocket(emu_socket);
-                emu_socket = INVALID_SOCKET;
-                header->SRB_Status = SS_ERR;
-                return SS_ERR;
+                ResetEmuSocket();
+                return CompleteExecSrb(cmd, SS_ERR, 0);
             }
             bytes_read = bytes_to_read;
             
@@ -335,10 +341,8 @@ DWORD __cdecl SendASPI32Command(PSRB srb_ptr) {
                 while (drained < excess) {
                     int chunk = (excess - drained) > sizeof(trash) ? sizeof(trash) : (excess - drained);
                     int r = RecvAll(emu_socket, trash, chunk);
-                    if (r <= 0) {
-                          // If drain fails, close socket to be safe
-                        closesocket(emu_socket);
-                        emu_socket = INVALID_SOCKET;
+                        if (r <= 0) {
+                        ResetEmuSocket();
                         break;
                     }
                     drained += r;
@@ -357,16 +361,7 @@ DWORD __cdecl SendASPI32Command(PSRB srb_ptr) {
             }
         }
 
-        header->SRB_Status = (status == SS_COMP) ? SS_COMP : SS_ERR;
-        cmd->SRB_HaStat = 0;
-        cmd->SRB_TgtStat = scsi_target_status;
-        
-        // Handle PostProc (Event or Callback)
-        if (cmd->SRB_Flags & SRB_EVENT_NOTIFY) { 
-             SetEvent((HANDLE)cmd->SRB_PostProc);
-        }
-        
-        return header->SRB_Status;
+        return CompleteExecSrb(cmd, (status == SS_COMP) ? SS_COMP : SS_ERR, scsi_target_status);
     }
 
     return SS_ERR;

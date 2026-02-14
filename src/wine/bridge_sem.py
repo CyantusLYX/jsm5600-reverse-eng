@@ -251,6 +251,7 @@ class BridgeSEM:
         self.last_ht_state = None
         self._scsi_lock = threading.Lock()  # Serialize all SCSI device access
         self._state_lock = threading.Lock()  # Protect shared status state
+        self.sg_timeout_ms = int(os.environ.get("BRIDGE_SG_TIMEOUT_MS", "1200"))
 
         # --- IPC (ZeroMQ) ---
         self.zmq_pub = None
@@ -401,13 +402,17 @@ class BridgeSEM:
             False  # Track per-connection: fake Power-On/Reset for CheckSemStatus
         )
         try:
+            conn.settimeout(2.0)
             session_logger = SCSILogger()
             session_logger.write_meta(f"Client Connected: {addr}")
 
             def recvall(sock, length):
                 data = bytearray()
                 while len(data) < length:
-                    chunk = sock.recv(length - len(data))
+                    try:
+                        chunk = sock.recv(length - len(data))
+                    except socket.timeout:
+                        return None
                     if not chunk:
                         return None
                     data.extend(chunk)
@@ -630,7 +635,7 @@ class BridgeSEM:
         io_hdr.interface_id = ord("S")
         io_hdr.cmd_len = len(cdb_bytes)
         io_hdr.mx_sb_len = 32
-        io_hdr.timeout = 5000
+        io_hdr.timeout = self.sg_timeout_ms
 
         if direction == 2:
             io_hdr.dxfer_direction = SG_DXFER_TO_DEV

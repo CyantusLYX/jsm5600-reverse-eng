@@ -1,6 +1,6 @@
 pkgname=wine-jsm5600
 pkgver=11.2
-pkgrel=1
+pkgrel=3
 pkgdesc='Patched Wine build for JSM5600 16-bit startup fixes'
 arch=('x86_64')
 url='https://gitlab.winehq.org/wine/wine'
@@ -34,18 +34,26 @@ prepare() {
 
 build() {
   local _src="${srcdir}/wine-wine-${pkgver}"
-  mkdir -p "${srcdir}/build"
-  cd "${srcdir}/build"
+  mkdir -p "${srcdir}/build32"
+  cd "${srcdir}/build32"
+
+  # Force portable 32-bit flags; do not inherit host-native tuning.
+  export CC="gcc -m32"
+  export CXX="g++ -m32"
+  export CFLAGS='-O2 -pipe -m32 -march=i686 -mtune=generic'
+  export CXXFLAGS='-O2 -pipe -m32 -march=i686 -mtune=generic'
+  export LDFLAGS='-m32'
+  export PKG_CONFIG_LIBDIR="/usr/lib32/pkgconfig:/usr/share/pkgconfig"
+  export PKG_CONFIG_PATH="/usr/lib32/pkgconfig:/usr/share/pkgconfig"
 
   "${_src}/configure" \
-    --prefix=/opt/wine-jsm5600 \
-    --enable-win64
+    --prefix=/opt/wine-jsm5600
 
   make
 }
 
 package() {
-  cd "${srcdir}/build"
+  cd "${srcdir}/build32"
   make DESTDIR="${pkgdir}" install
 
   install -d "${pkgdir}/usr/bin"
