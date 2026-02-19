@@ -495,34 +495,55 @@ class BridgeSEM:
                     self._publish_from_cdb(inner_cdb)
 
                 # Intercept Set Commands (Publish to ZMQ)
-                # --- [0xFA] Native Command with Retry ---
+                # --- [0xFA] Smart FA Command Unwrapper ---
                 if opcode == 0xFA:
-                    # We must NOT unwrap FA commands, as the inner CDBs often have an implied
-                    # Data-In phase which mismatches the NO-DATA direction of the unwrapper,
-                    # causing the target hardware's BOT state machine to hang and generating
-                    # DID_ERROR / DID_NO_CONNECT host codes. The hardware natively supports FA.
+                    # Extract the inner command from the FA wrapper's data_out payload.
+                    # The FA CDB is 10 bytes: FA 00 00 00 00 00 00 len 00 00
+                    # The actual inner command (e.g., 01, 02, 03) is inside data_out.
+                    inner_cdb = data_out[:6] if len(data_out) >= 6 else data_out
+                    
+                    if len(inner_cdb) > 0:
+                        inner_opcode = inner_cdb[0]
+                        
+                        # Apply smart direction/length based on the inner opcode to avoid
+                        # SCSI Phase Mismatch (Host=0x07 DID_ERROR) on the USB interface.
+                        # Test results proved Opcode 03 (Request Sense / Notify) REQUIRES 
+                        # an 'IN' phase, while 01 and 02 work fine as No-Data (Dir=0).
+                        if inner_opcode == 0x03:
+                            inner_dir = 1 # SG_DXFER_FROM_DEV
+                            inner_xfer_len = 128 # Provide a dummy buffer for the hardware to write into
+                            inner_data_out = b""
+                        elif inner_opcode == 0x04:
+                            inner_dir = 2 # SG_DXFER_TO_DEV
+                            inner_xfer_len = len(data_out) - 6
+                            inner_data_out = data_out[6:]
+                        else:
+                            inner_dir = 0 # SG_DXFER_NONE
+                            inner_xfer_len = 0
+                            inner_data_out = b""
 
-                    resp_data, status, detail, scsi_status, sense_bytes = self.send_scsi_cmd(
-                        cdb, direction=dir_byte, data_out=data_out, xfer_len=xfer_len
-                    )
+                        logger.debug(f"UNWRAP FA: Inner CDB: {' '.join([f'{b:02X}' for b in inner_cdb])} Dir: {inner_dir}")
+                        
+                        resp_data, status, detail, scsi_status, sense_bytes = self.send_scsi_cmd(
+                            inner_cdb, direction=inner_dir, data_out=inner_data_out, xfer_len=inner_xfer_len
+                        )
 
-                    # Handle hardware returning UNIT ATTENTION (0x06, 0x29) to the FA wrapper.
-                    # SEM32.DLL treats all FA failures as catastrophic (Disconnected),
-                    # we must consume the Unit Attention silently and retry the command.
-                    if status != 1 and scsi_status == 0x02 and sense_bytes and len(sense_bytes) > 2:
-                        sense_key = sense_bytes[2] & 0x0F
-                        if sense_key == 0x06: # UNIT ATTENTION
-                            logger.info(f"INTERCEPT: Hardware returned UNIT ATTENTION to FA command. Retrying silently...")
-                            session_logger.write_meta("INTERCEPT: Retrying FA command after UNIT ATTENTION")
-                            resp_data, status, detail, scsi_status, sense_bytes = self.send_scsi_cmd(
-                                cdb, direction=dir_byte, data_out=data_out, xfer_len=xfer_len
-                            )
-
-                    # FA wrappers don't expect inner command data back, ensure it's empty
-                    if dir_byte != 1:
-                        resp_data = b""
+                        # Handle UNIT ATTENTION (0x06, 0x29) silently on the unwrapped command
+                        if status != 1 and scsi_status == 0x02 and sense_bytes and len(sense_bytes) > 2:
+                            sense_key = sense_bytes[2] & 0x0F
+                            if sense_key == 0x06: # UNIT ATTENTION
+                                logger.info(f"INTERCEPT: Hardware returned UNIT ATTENTION to unwrapped FA command. Retrying silently...")
+                                session_logger.write_meta("INTERCEPT: Retrying FA command after UNIT ATTENTION")
+                                resp_data, status, detail, scsi_status, sense_bytes = self.send_scsi_cmd(
+                                    inner_cdb, direction=inner_dir, data_out=inner_data_out, xfer_len=inner_xfer_len
+                                )
+                    
+                    # FA wrappers themselves never return data payloads in the ASPI layer.
+                    # We must clear resp_data so that we don't leak inner command responses
+                    # (like the 62 bytes from Opcode 03) back to SEM32.DLL and corrupt its parsing.
+                    resp_data = b""
                     intercepted = True
-
+                    
                 if opcode != 0xFA and not intercepted:
                     self._publish_from_cdb(cdb)
 
