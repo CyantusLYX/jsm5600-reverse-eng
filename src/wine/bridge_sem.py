@@ -533,6 +533,23 @@ class BridgeSEM:
                             data_out=new_data_out,
                             xfer_len=len(new_data_out)
                         )
+                        
+                    # Handle hardware returning UNIT ATTENTION (0x06) to the unwrapped command
+                    # Because SEM32.DLL treats all FA failures as catastrophic (Disconnected), 
+                    # we must consume the Unit Attention silently and retry the actual command.
+                    if status != 1 and scsi_status == 0x02 and sense_bytes and len(sense_bytes) > 2:
+                        sense_key = sense_bytes[2] & 0x0F
+                        if sense_key == 0x06: # UNIT ATTENTION
+                            logger.info(f"INTERCEPT: Hardware returned UNIT ATTENTION to unwrapped FA command. Retrying silently...")
+                            # Retry the same command exactly once to clear the Unit Attention
+                            if len(data_out) <= 16:
+                                resp_data, status, detail, scsi_status, sense_bytes = self.send_scsi_cmd(
+                                    data_out, direction=0, data_out=b"", xfer_len=0
+                                )
+                            else:
+                                resp_data, status, detail, scsi_status, sense_bytes = self.send_scsi_cmd(
+                                    inner_cdb, direction=direction, data_out=new_data_out, xfer_len=len(new_data_out)
+                                )
                     intercepted = True
                     
                 if opcode != 0xFA and not intercepted:
