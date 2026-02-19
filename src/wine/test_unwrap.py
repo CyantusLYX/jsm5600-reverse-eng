@@ -120,6 +120,13 @@ def main():
     # 5. HT ON Natively Unwrapped - direction=2 (Data Out 6 bytes)
     send_scsi(fd, "Test 5: HT ON Unwrapped (Dir=2/OUT)", b"\x02\x01\x00\x02\x40\x01", direction=2, length=64)
 
+    # 6. Test the Notify Hardware command (03 ...) which caused Host=0x07 crashes
+    send_scsi(fd, "Test 6: Opcode 03 Unwrapped (Dir=0)", b"\x03\x00\x00\x02\x3E\x00", direction=0, length=0)
+    send_scsi(fd, "Test 7: Opcode 03 Unwrapped (Dir=1/IN)", b"\x03\x00\x00\x02\x3E\x00", direction=1, length=128)
+    
+    # 7. Test a Vacuum command
+    send_scsi(fd, "Test 8: Vacuum Init (Dir=0)", b"\x01\x01\x00\x02\x63\xFF", direction=0, length=0)
+
     os.close(fd)
     print("Done. Please share the output of this script and check if the SEM hardware clicked/responded to any of these tests.")
 
