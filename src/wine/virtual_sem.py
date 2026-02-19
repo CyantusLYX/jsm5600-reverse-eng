@@ -161,11 +161,11 @@ class VirtualSEM:
 
         # --- SEM Internal State ---
         self.state = {
-            "ht_status": 0,  # 0: Off, 1: On
+            "ht_status": 2,  # 0: Off, 1: On-Transit, 2: On-Ready
             "ht_mode": 0,
             "accv": 15000,  # 15kV default
             "filament": 0,
-            "vacuum_status": 0,  # 0: AIR / VENT
+            "vacuum_status": 3,  # 3: EVAC / Ready
             "vacuum_mode": 0,  # 0: High, 1: Low
             "mag_index": 100,  # Arbitrary index
             "alc_seq": 0,
@@ -254,6 +254,8 @@ class VirtualSEM:
                 response_data, status = self.process_scsi_command(
                     cdb, direction=direction, data_out=data_out, xfer_len=xfer_len
                 )
+                scsi_status = 0
+                sense_bytes = b""
 
                 res_extra_info = ""
                 if cdb and cdb[0] == 0xD0:
@@ -273,8 +275,15 @@ class VirtualSEM:
                         extra_info=res_extra_info,
                     )
 
-                resp_header = struct.pack("<BI", status, len(response_data))
+                # Extended response protocol expected by fake_wnaspi32:
+                # status(1), scsi_tgt_status(1), sense_len(1), sense, data_len(4), data
+                resp_header = struct.pack("<BBB", status, scsi_status, len(sense_bytes))
                 conn.sendall(resp_header)
+
+                if len(sense_bytes) > 0:
+                    conn.sendall(sense_bytes)
+
+                conn.sendall(struct.pack("<I", len(response_data)))
 
                 if len(response_data) > 0:
                     conn.sendall(response_data)
@@ -335,6 +344,10 @@ class VirtualSEM:
             if len(payload) >= xfer_len:
                 return payload[:xfer_len]
             return payload + bytes(xfer_len - len(payload))
+        # Honor host transfer length strictly: when alloc/xfer is zero,
+        # do not emit fallback bytes that could desync legacy callers.
+        if xfer_len == 0:
+            return b""
         if fallback_len is None:
             return payload
         if len(payload) >= fallback_len:
@@ -648,6 +661,18 @@ class VirtualSEM:
                     )
                     logger.info(f"CMD: SetFilament -> {val}")
 
+            # Query / short command: [02 00 00 00 xx 00]
+            else:
+                # Return current gun/HT status as acknowledgement
+                # Return 4 bytes to be safe, value=ht
+                ht = self.state.get("ht_status", 0)
+                # Maybe it expects 2 bytes? Or 4?
+                # Using 4 bytes (int32) or 2 bytes + padding
+                response = self._build_response(
+                    struct.pack("<I", ht), xfer_len, fallback_len=4
+                )
+                logger.info(f"CMD: GunQuery (cdb1={cdb[1]:02x}) -> ht={ht} (4 bytes)")
+
         # --- [0x03] Lens Control (Mag) ---
         elif opcode == 0x03:
             # SetMag: { "0": "0x03", "1": "0x01", "8": "0x10" }
@@ -703,8 +728,21 @@ class VirtualSEM:
         # --- [0xC3] Legacy Read ---
         elif opcode == 0xC3:
             alloc_len = self._alloc_len_from_cdb(cdb)
-            response = self._build_response(b"", xfer_len, fallback_len=alloc_len)
-            logger.info("CMD: GetLegacyStatus")
+            # Revert 0x01 forcing.
+            # Try mapping Vacuum Status to byte 3?
+            sim_status = bytearray(max(alloc_len, 4))
+            # sim_status[0] = 0x00
+            
+            # Map states to see if any triggers "Connected"
+            if self.state.get("ht_status", 0):
+                sim_status[1] |= 0x01
+            if self.state.get("vacuum_status", 0) == 3: # Ready
+                sim_status[2] |= 0x01 # Guessing byte 2? or 3?
+                # Let's try reflecting it in byte 3 (which aligns with 0xC4 01 return?)
+                sim_status[3] = self.state["vacuum_status"]
+            
+            response = self._build_response(sim_status, xfer_len, fallback_len=alloc_len)
+            logger.info(f"CMD: GetLegacyStatus -> {response.hex()}")
 
         # --- [0xC8] Lens Read ---
         elif opcode == 0xC8 and cdb_len > 1:
@@ -774,11 +812,25 @@ class VirtualSEM:
                 or (opcode & 0xF0) == 0xD0
                 or (opcode & 0xF0) == 0xE0
             ):
+                if opcode == 0xC0 and data_out and len(data_out) > 0:
+                    response = self._build_response(
+                        data_out, xfer_len, fallback_len=len(data_out)
+                    )
+                    logger.debug(
+                        f"CMD: Unknown WriteAck {hex_cdb} -> echo {len(response)} bytes"
+                    )
+                    return response, status
                 alloc_len = self._alloc_len_from_cdb(cdb)
                 response = self._build_response(b"", xfer_len, fallback_len=alloc_len)
                 logger.debug(f"CMD: Unknown Read {hex_cdb} -> {alloc_len} bytes")
             else:
                 logger.debug(f"CMD: Unknown Write {hex_cdb}")
+
+        # For known pure write commands, do not return payload bytes.
+        # Some legacy opcodes (e.g. C0/C3 variants) behave like write+read,
+        # so keep their synthesized response paths intact.
+        if direction == 2 and opcode in {0xC2, 0xE0, 0xFA}:
+            return b"", status
 
         return response, status
 

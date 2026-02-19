@@ -57,6 +57,7 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved) {
 static SOCKET emu_socket = INVALID_SOCKET;
 static BOOL winsock_init = FALSE;
 static const DWORD kSockTimeoutMs = 1200;
+static volatile LONG g_srb_seq = 0;
 
 static void LogMsg(const char* fmt, ...) {
     char buffer[1024];
@@ -66,6 +67,22 @@ static void LogMsg(const char* fmt, ...) {
     va_end(args);
     // Write to a log file or stderr
     fprintf(stderr, "[FakeASPI] %s\n", buffer);
+}
+
+static BOOL IsLikelyExecutableAddress(const void *ptr) {
+    MEMORY_BASIC_INFORMATION mbi;
+    DWORD protect;
+
+    if (!ptr) return FALSE;
+    if (VirtualQuery(ptr, &mbi, sizeof(mbi)) == 0) return FALSE;
+    if (mbi.State != MEM_COMMIT) return FALSE;
+
+    protect = mbi.Protect & 0xff;
+    if (protect == PAGE_EXECUTE || protect == PAGE_EXECUTE_READ ||
+        protect == PAGE_EXECUTE_READWRITE || protect == PAGE_EXECUTE_WRITECOPY) {
+        return TRUE;
+    }
+    return FALSE;
 }
 
 static BOOL ConnectToEmulator() {
@@ -114,13 +131,48 @@ static void ResetEmuSocket(void) {
 }
 
 static DWORD CompleteExecSrb(SRB_ExecSCSICmd *cmd, BYTE aspi_status, BYTE scsi_tgt_status) {
+    LONG seq;
+    DWORD tid;
+
     if (!cmd) return aspi_status;
+
+    seq = InterlockedIncrement(&g_srb_seq);
+    tid = GetCurrentThreadId();
+
+    LogMsg("SRB#%ld complete begin: tid=%lu cmd=0x%02X status=%u->%u tgt=%u flags=0x%02X postproc=%p",
+        seq,
+        (unsigned long)tid,
+        cmd->SRB_Cmd,
+        cmd->SRB_Status,
+        aspi_status,
+        scsi_tgt_status,
+        cmd->SRB_Flags,
+        cmd->SRB_PostProc);
+
     cmd->SRB_Status = aspi_status;
     cmd->SRB_HaStat = 0;
     cmd->SRB_TgtStat = scsi_tgt_status;
+
     if ((cmd->SRB_Flags & SRB_EVENT_NOTIFY) && cmd->SRB_PostProc) {
-        SetEvent((HANDLE)cmd->SRB_PostProc);
+        BOOL set_ok = SetEvent((HANDLE)cmd->SRB_PostProc);
+        LogMsg("SRB#%ld event notify: handle=%p result=%d err=%lu",
+            seq,
+            cmd->SRB_PostProc,
+            set_ok,
+            (unsigned long)GetLastError());
     }
+
+    if ((cmd->SRB_Flags & SRB_POSTING) && cmd->SRB_PostProc) {
+        if (IsLikelyExecutableAddress((const void*)cmd->SRB_PostProc)) {
+            LogMsg("SRB#%ld posting callback call: fn=%p arg=%p", seq, cmd->SRB_PostProc, cmd);
+            cmd->SRB_PostProc(cmd);
+            LogMsg("SRB#%ld posting callback return", seq);
+        } else {
+            LogMsg("SRB#%ld posting callback skipped: fn=%p not executable", seq, cmd->SRB_PostProc);
+        }
+    }
+
+    LogMsg("SRB#%ld complete end", seq);
     return aspi_status;
 }
 
@@ -187,7 +239,12 @@ DWORD __cdecl SendASPI32Command(PSRB srb_ptr) {
     SRB_Header *header = (SRB_Header*)srb_ptr;
     SRB_ExecSCSICmd *cmd = (SRB_ExecSCSICmd*)srb_ptr;
     
-    // LogMsg("SendASPI32Command: Cmd=%d", header->SRB_Cmd);
+    LogMsg("SendASPI32Command: tid=%lu srb=%p cmd=0x%02X flags=0x%02X status=%u",
+        (unsigned long)GetCurrentThreadId(),
+        srb_ptr,
+        header->SRB_Cmd,
+        header->SRB_Flags,
+        header->SRB_Status);
 
     header->SRB_Status = SS_PENDING;
 
@@ -213,6 +270,28 @@ DWORD __cdecl SendASPI32Command(PSRB srb_ptr) {
     }
 
     if (header->SRB_Cmd == SC_EXEC_SCSI_CMD) {
+        char cdb_hex[16 * 3 + 1];
+        unsigned int i;
+        unsigned int pos = 0;
+
+        cdb_hex[0] = '\0';
+        for (i = 0; i < cmd->SRB_CDBLen && i < 16; i++) {
+            if (pos + 4 >= sizeof(cdb_hex)) break;
+            pos += (unsigned int)snprintf(cdb_hex + pos, sizeof(cdb_hex) - pos,
+                                          "%02X%s", cmd->CDBByte[i],
+                                          (i + 1 < cmd->SRB_CDBLen && i + 1 < 16) ? " " : "");
+        }
+
+        LogMsg("ExecSCSI begin: cdb_len=%u xfer_len=%lu dir_flags=0x%02X target=%u lun=%u sense_len=%u postproc=%p",
+            cmd->SRB_CDBLen,
+            (unsigned long)cmd->SRB_BufLen,
+            cmd->SRB_Flags,
+            cmd->SRB_Target,
+            cmd->SRB_Lun,
+            cmd->SRB_SenseLen,
+            cmd->SRB_PostProc);
+        LogMsg("ExecSCSI CDB: %s", cdb_hex);
+
         if (cmd->SRB_CDBLen == 0 || cmd->SRB_CDBLen > 16) {
             LogMsg("Invalid CDB length: %u", cmd->SRB_CDBLen);
             return CompleteExecSrb(cmd, SS_ERR, 0);

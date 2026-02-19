@@ -57,7 +57,7 @@ typedef struct {
     BYTE  SRB_CDBLen;
     BYTE  SRB_HaStat;
     BYTE  SRB_TgtStat;
-    void  (*SRB_PostProc)();
+    void  (__cdecl *SRB_PostProc)(void *);
     void  *SRB_Rsvd2;
     BYTE  SRB_Rsvd3[16];
     BYTE  CDBByte[16];

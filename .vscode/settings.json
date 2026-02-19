@@ -1,3 +1,4 @@
 {
-    "cmake.sourceDirectory": "/home/cyantus/sd/sem/sem/5610E_Ver526/content/src/sem"
+    "cmake.sourceDirectory": "/home/cyantus/sd/sem/sem/5610E_Ver526/content/src/sem",
+    "cmake.ignoreCMakeListsMissing": true
 }

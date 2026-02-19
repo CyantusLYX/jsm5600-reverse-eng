@@ -109,3 +109,6 @@ packaging/arch/wine-jsm5600/*.sig
 # Archives
 *.gz
 *.zst
+logs/*
+942LOG.TXT
+editfile

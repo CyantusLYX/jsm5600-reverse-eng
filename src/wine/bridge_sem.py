@@ -495,7 +495,47 @@ class BridgeSEM:
                     self._publish_from_cdb(inner_cdb)
 
                 # Intercept Set Commands (Publish to ZMQ)
-                if opcode != 0xFA:
+                # --- [0xFA] Unwrap to Native Command ---
+                if opcode == 0xFA and data_out and len(data_out) >= 6:
+                    # The FA CDB acts as a wrapper. The actual hardware command (e.g. 6 bytes)
+                    # is located in the data_out payload. We unwrap it and send it
+                    # directly to the SCSI target, as older firmware ignores FA wrappers.
+                    inner_cdb = data_out[:6]
+                    # If FA payload is exactly the 6-byte CDB, there's no extra payload.
+                    # Some Mode 1 formats might be longer.
+                    # SEM32.DLL puts the whole target payload into data_out.
+                    # We will treat the entire data_out as the CDB, or perhaps just the first part
+                    # as CDB and the rest as payload if applicable.
+                    # Actually, for the exact C-series or 0x01/0x02, the length can be 6, 10 or 11.
+                    # If it's a 6-byte command, the CDB is 6 bytes.
+                    # If it's 10 or 11, the CDB is 10 bytes?
+                    # The payload itself is a single byte stream. We'll send it as the raw CDB
+                    # if length <= 16, assuming the entire wrapper payload *is* the SCSI CDB.
+                    
+                    if len(data_out) <= 16:
+                        # Send the entire unwrapped payload as the CDB. Direction = 0 (No data)
+                        logger.info(f"INTERCEPT: Unwrapping FA command. Sending payload as CDB: " + " ".join([f"{b:02X}" for b in data_out]))
+                        resp_data, status, detail, scsi_status, sense_bytes = self.send_scsi_cmd(
+                            data_out,
+                            direction=0,
+                            data_out=b"",
+                            xfer_len=0
+                        )
+                    else:
+                        # Fallback if somehow there's a payload *with* the wrapped CDB (e.g., LUT write)
+                        # Though we haven't seen that for FA.
+                        inner_cdb = data_out[:10]
+                        new_data_out = data_out[10:]
+                        logger.info(f"INTERCEPT: Unwrapping FA command (Long). Inner CDB: " + " ".join([f"{b:02X}" for b in inner_cdb]))
+                        resp_data, status, detail, scsi_status, sense_bytes = self.send_scsi_cmd(
+                            inner_cdb,
+                            direction=direction,
+                            data_out=new_data_out,
+                            xfer_len=len(new_data_out)
+                        )
+                    intercepted = True
+                    
+                if opcode != 0xFA and not intercepted:
                     self._publish_from_cdb(cdb)
 
                 # --- Fake UNIT ATTENTION for CheckSemStatus ---
