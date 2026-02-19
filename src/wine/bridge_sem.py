@@ -550,6 +550,11 @@ class BridgeSEM:
                                 resp_data, status, detail, scsi_status, sense_bytes = self.send_scsi_cmd(
                                     inner_cdb, direction=direction, data_out=new_data_out, xfer_len=len(new_data_out)
                                 )
+                    
+                    # FA wrappers themselves never return data payloads in the ASPI layer.
+                    # We must clear resp_data so that we don't leak inner command responses 
+                    # back to SEM32.DLL and corrupt its parsing of subsequent responses.
+                    resp_data = b""
                     intercepted = True
                     
                 if opcode != 0xFA and not intercepted:
