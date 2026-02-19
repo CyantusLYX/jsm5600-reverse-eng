@@ -500,29 +500,20 @@ class BridgeSEM:
                     # Extract the inner command from the FA wrapper's data_out payload.
                     # The FA CDB is 10 bytes: FA 00 00 00 00 00 00 len 00 00
                     # The actual inner command (e.g., 01, 02, 03) is inside data_out.
+                    # Any bytes following the first 6 bytes in data_out belong to
+                    # the Data-Out phase of the inner command.
                     inner_cdb = data_out[:6] if len(data_out) >= 6 else data_out
                     
                     if len(inner_cdb) > 0:
-                        inner_opcode = inner_cdb[0]
-                        
-                        # Apply smart direction/length based on the inner opcode to avoid
-                        # SCSI Phase Mismatch (Host=0x07 DID_ERROR) on the USB interface.
-                        # Test results proved Opcode 03 (Request Sense / Notify) REQUIRES 
-                        # an 'IN' phase, while 01 and 02 work fine as No-Data (Dir=0).
-                        if inner_opcode == 0x03:
-                            inner_dir = 1 # SG_DXFER_FROM_DEV
-                            inner_xfer_len = 128 # Provide a dummy buffer for the hardware to write into
-                            inner_data_out = b""
-                        elif inner_opcode == 0x04:
+                        inner_data_out = data_out[6:]
+                        if len(inner_data_out) > 0:
                             inner_dir = 2 # SG_DXFER_TO_DEV
-                            inner_xfer_len = len(data_out) - 6
-                            inner_data_out = data_out[6:]
+                            inner_xfer_len = len(inner_data_out)
                         else:
                             inner_dir = 0 # SG_DXFER_NONE
                             inner_xfer_len = 0
-                            inner_data_out = b""
 
-                        logger.debug(f"UNWRAP FA: Inner CDB: {' '.join([f'{b:02X}' for b in inner_cdb])} Dir: {inner_dir}")
+                        logger.debug(f"UNWRAP FA: Inner CDB: {' '.join([f'{b:02X}' for b in inner_cdb])} Dir: {inner_dir} Len: {inner_xfer_len}")
                         
                         resp_data, status, detail, scsi_status, sense_bytes = self.send_scsi_cmd(
                             inner_cdb, direction=inner_dir, data_out=inner_data_out, xfer_len=inner_xfer_len
@@ -540,7 +531,7 @@ class BridgeSEM:
                     
                     # FA wrappers themselves never return data payloads in the ASPI layer.
                     # We must clear resp_data so that we don't leak inner command responses
-                    # (like the 62 bytes from Opcode 03) back to SEM32.DLL and corrupt its parsing.
+                    # back to SEM32.DLL and corrupt its parsing.
                     resp_data = b""
                     intercepted = True
                     
