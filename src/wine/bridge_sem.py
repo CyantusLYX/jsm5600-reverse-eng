@@ -495,68 +495,34 @@ class BridgeSEM:
                     self._publish_from_cdb(inner_cdb)
 
                 # Intercept Set Commands (Publish to ZMQ)
-                # --- [0xFA] Unwrap to Native Command ---
-                if opcode == 0xFA and data_out and len(data_out) >= 6:
-                    # The FA CDB acts as a wrapper. The actual hardware command (e.g. 6 bytes)
-                    # is located in the data_out payload. We unwrap it and send it
-                    # directly to the SCSI target, as older firmware ignores FA wrappers.
-                    inner_cdb = data_out[:6]
-                    # If FA payload is exactly the 6-byte CDB, there's no extra payload.
-                    # Some Mode 1 formats might be longer.
-                    # SEM32.DLL puts the whole target payload into data_out.
-                    # We will treat the entire data_out as the CDB, or perhaps just the first part
-                    # as CDB and the rest as payload if applicable.
-                    # Actually, for the exact C-series or 0x01/0x02, the length can be 6, 10 or 11.
-                    # If it's a 6-byte command, the CDB is 6 bytes.
-                    # If it's 10 or 11, the CDB is 10 bytes?
-                    # The payload itself is a single byte stream. We'll send it as the raw CDB
-                    # if length <= 16, assuming the entire wrapper payload *is* the SCSI CDB.
-                    
-                    if len(data_out) <= 16:
-                        # Send the entire unwrapped payload as the CDB. Direction = 0 (No data)
-                        logger.info(f"INTERCEPT: Unwrapping FA command. Sending payload as CDB: " + " ".join([f"{b:02X}" for b in data_out]))
-                        resp_data, status, detail, scsi_status, sense_bytes = self.send_scsi_cmd(
-                            data_out,
-                            direction=0,
-                            data_out=b"",
-                            xfer_len=0
-                        )
-                    else:
-                        # Fallback if somehow there's a payload *with* the wrapped CDB (e.g., LUT write)
-                        # Though we haven't seen that for FA.
-                        inner_cdb = data_out[:10]
-                        new_data_out = data_out[10:]
-                        logger.info(f"INTERCEPT: Unwrapping FA command (Long). Inner CDB: " + " ".join([f"{b:02X}" for b in inner_cdb]))
-                        resp_data, status, detail, scsi_status, sense_bytes = self.send_scsi_cmd(
-                            inner_cdb,
-                            direction=direction,
-                            data_out=new_data_out,
-                            xfer_len=len(new_data_out)
-                        )
-                        
-                    # Handle hardware returning UNIT ATTENTION (0x06) to the unwrapped command
-                    # Because SEM32.DLL treats all FA failures as catastrophic (Disconnected), 
-                    # we must consume the Unit Attention silently and retry the actual command.
+                # --- [0xFA] Native Command with Retry ---
+                if opcode == 0xFA:
+                    # We must NOT unwrap FA commands, as the inner CDBs often have an implied
+                    # Data-In phase which mismatches the NO-DATA direction of the unwrapper,
+                    # causing the target hardware's BOT state machine to hang and generating
+                    # DID_ERROR / DID_NO_CONNECT host codes. The hardware natively supports FA.
+
+                    resp_data, status, detail, scsi_status, sense_bytes = self.send_scsi_cmd(
+                        cdb, direction=dir_byte, data_out=data_out, xfer_len=xfer_len
+                    )
+
+                    # Handle hardware returning UNIT ATTENTION (0x06, 0x29) to the FA wrapper.
+                    # SEM32.DLL treats all FA failures as catastrophic (Disconnected),
+                    # we must consume the Unit Attention silently and retry the command.
                     if status != 1 and scsi_status == 0x02 and sense_bytes and len(sense_bytes) > 2:
                         sense_key = sense_bytes[2] & 0x0F
                         if sense_key == 0x06: # UNIT ATTENTION
-                            logger.info(f"INTERCEPT: Hardware returned UNIT ATTENTION to unwrapped FA command. Retrying silently...")
-                            # Retry the same command exactly once to clear the Unit Attention
-                            if len(data_out) <= 16:
-                                resp_data, status, detail, scsi_status, sense_bytes = self.send_scsi_cmd(
-                                    data_out, direction=0, data_out=b"", xfer_len=0
-                                )
-                            else:
-                                resp_data, status, detail, scsi_status, sense_bytes = self.send_scsi_cmd(
-                                    inner_cdb, direction=direction, data_out=new_data_out, xfer_len=len(new_data_out)
-                                )
-                    
-                    # FA wrappers themselves never return data payloads in the ASPI layer.
-                    # We must clear resp_data so that we don't leak inner command responses 
-                    # back to SEM32.DLL and corrupt its parsing of subsequent responses.
-                    resp_data = b""
+                            logger.info(f"INTERCEPT: Hardware returned UNIT ATTENTION to FA command. Retrying silently...")
+                            session_logger.write_meta("INTERCEPT: Retrying FA command after UNIT ATTENTION")
+                            resp_data, status, detail, scsi_status, sense_bytes = self.send_scsi_cmd(
+                                cdb, direction=dir_byte, data_out=data_out, xfer_len=xfer_len
+                            )
+
+                    # FA wrappers don't expect inner command data back, ensure it's empty
+                    if dir_byte != 1:
+                        resp_data = b""
                     intercepted = True
-                    
+
                 if opcode != 0xFA and not intercepted:
                     self._publish_from_cdb(cdb)
 
@@ -629,16 +595,6 @@ class BridgeSEM:
                     elif opcode == 0xD0:
                         status_diff = self._log_status_diff(resp_data)
                         self._publish_status_block(resp_data)
-                    elif inner_cdb and len(inner_cdb) >= 2:
-                        inner_opcode = inner_cdb[0]
-                        if inner_opcode == 0xC8 and inner_cdb[1] == 0x50:
-                            val = self._extract_word(resp_data)
-                            if val is not None:
-                                self._publish_state("MAG", val)
-                        elif inner_opcode == 0xC6 and inner_cdb[1] == 0x11:
-                            val = self._extract_word(resp_data)
-                            if val is not None and val > 1000:
-                                self._publish_state("ACCV", val)
 
                     # GetAccv2 (0x02 01 ... 08 ... 00)
                     # This is tricky as it's a SET command but sometimes apps read back?
@@ -739,11 +695,15 @@ class BridgeSEM:
                     if sense_hex:
                         detail += f" Sense={sense_hex}"
 
-                if status == 0:
+                # Only return success (status=1) if target logic AND kernel host delivery succeeded
+                if status == 0 and io_hdr.host_status == 0 and io_hdr.driver_status == 0:
                     if direction == 1:
                         xfered = int(io_hdr.dxfer_len - io_hdr.resid)
                         return data_buff.raw[:xfered], 1, detail, status, sense_bytes
                     return b"", 1, detail, status, sense_bytes
+                
+                # Command failed (either SCSI target error or Linux host transport error)
+                # Return empty bytes to avoid leaking previously successful kernel buffer contents
                 return b"", 4, detail, status, sense_bytes
         except Exception as e:
             logger.error(f"IOCTL failed: {e}")
